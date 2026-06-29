@@ -1,98 +1,124 @@
-name: Generate Banner
+name: Generate & Upload Banner
 
 on:
-  # Manual trigger — can override subscriber count
+  # 每2小时自动运行（在免费额度内：每天12次，每月360次，远低于2000分钟上限）
+  schedule:
+    - cron: "0 */2 * * *"
+
+  # 手动触发，可覆盖订阅数
   workflow_dispatch:
     inputs:
       subscribers:
-        description: "Subscriber count (leave blank to fetch from YouTube API)"
+        description: "手动指定订阅数（留空则从 YouTube API 自动获取）"
         required: false
         default: ""
-
-  # Auto-run every 6 hours
-  schedule:
-    - cron: "0 */6 * * *"
+      skip_upload:
+        description: "跳过上传步骤（仅生成 banner.png）"
+        required: false
+        default: "false"
 
 jobs:
   render:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to commit banner.png back to repo
+      contents: write
 
     steps:
+      # ── 1. 检出代码 ────────────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ── 2. 安装 Node.js ───────────────────────────────────────────────
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
 
+      # ── 3. 安装依赖 ───────────────────────────────────────────────────
       - name: Install dependencies
         run: npm ci
 
+      # ── 4. 安装 Playwright Chromium ───────────────────────────────────
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      # ── Fetch live subscriber count from YouTube Data API v3 ──────────
-      # Requires secret: YOUTUBE_API_KEY  and  YOUTUBE_CHANNEL_ID
-      - name: Fetch subscriber count
+      # ── 5. 从 YouTube API 获取最新订阅数 ──────────────────────────────
+      - name: Fetch subscriber count from YouTube API
         id: yt
-        if: ${{ github.event.inputs.subscribers == '' }}
+        if: ${{ github.event.inputs.subscribers == '' || github.event.inputs.subscribers == null }}
         run: |
-          SUBS=$(node -e "
-            const key = process.env.YOUTUBE_API_KEY;
-            const cid = process.env.YOUTUBE_CHANNEL_ID;
-            if (!key || !cid) { process.stdout.write('0'); process.exit(0); }
-            fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics&id=' + cid + '&key=' + key)
-              .then(r => r.json())
-              .then(d => process.stdout.write(d.items?.[0]?.statistics?.subscriberCount ?? '0'))
-              .catch(() => process.stdout.write('0'));
-          ")
+          SUBS=$(node --input-type=module << 'EOF'
+          const key = process.env.YOUTUBE_API_KEY;
+          const cid = process.env.YOUTUBE_CHANNEL_ID;
+          if (!key || !cid) { process.stdout.write("0"); process.exit(0); }
+          try {
+            const r = await fetch(
+              `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${cid}&key=${key}`
+            );
+            const d = await r.json();
+            process.stdout.write(d.items?.[0]?.statistics?.subscriberCount ?? "0");
+          } catch { process.stdout.write("0"); }
+          EOF
+          )
           echo "subs=$SUBS" >> $GITHUB_OUTPUT
+          echo "从 YouTube API 获取订阅数：$SUBS"
         env:
           YOUTUBE_API_KEY:    ${{ secrets.YOUTUBE_API_KEY }}
           YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
 
-      # ── Manual override wins; API result is fallback ───────────────────
+      # ── 6. 写入订阅数到配置文件 ───────────────────────────────────────
       - name: Write subscriber count to config
         run: |
           node --input-type=module << 'EOF'
           import { readFileSync, writeFileSync } from "fs";
-          const path = "public/config/banner.config.json";
-          const cfg  = JSON.parse(readFileSync(path, "utf8"));
+          const path   = "public/config/banner.config.json";
+          const cfg    = JSON.parse(readFileSync(path, "utf8"));
           const manual = process.env.MANUAL_SUBS;
           const auto   = process.env.AUTO_SUBS;
           const subs   = Number(manual || auto || cfg.data?.subs || 0);
-          cfg.data = { ...cfg.data, subs };
-          writeFileSync(path, JSON.stringify(cfg, null, 2) + "\n");
-          console.log(`Subscriber count set to ${subs}`);
+          if (subs > 0) {
+            cfg.data = { ...cfg.data, subs };
+            writeFileSync(path, JSON.stringify(cfg, null, 2) + "\n");
+            console.log(`✓ 订阅数已更新为：${subs}`);
+          } else {
+            console.log(`⚠ 订阅数为 0，保留配置文件原值：${cfg.data?.subs}`);
+          }
           EOF
         env:
           MANUAL_SUBS: ${{ github.event.inputs.subscribers }}
           AUTO_SUBS:   ${{ steps.yt.outputs.subs }}
 
-      - name: Start preview server
-        run: node server.mjs &
-
+      # ── 7. 生成 banner.png ────────────────────────────────────────────
       - name: Render banner
         run: node exporter/render-banner.mjs dist/banner.png
         env:
           BANNER_URL: ${{ secrets.BANNER_URL }}
 
+      # ── 8. 上传 Banner 到 YouTube ─────────────────────────────────────
+      - name: Upload banner to YouTube
+        if: ${{ github.event.inputs.skip_upload != 'true' }}
+        run: node exporter/upload-banner.mjs
+        env:
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          YOUTUBE_CHANNEL_ID:   ${{ secrets.YOUTUBE_CHANNEL_ID }}
+
+      # ── 9. 保存 artifact ──────────────────────────────────────────────
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: olympicmotion-banner
           path: dist/banner.png
-          retention-days: 30
+          retention-days: 7
 
-      # ── Commit banner.png back to repo (optional) ─────────────────────
-      - name: Commit updated banner
+      # ── 10. Commit 更新回 repo ────────────────────────────────────────
+      - name: Commit updated files
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add dist/banner.png public/config/banner.config.json
-          git diff --cached --quiet || git commit -m "chore: update banner [skip ci]"
+          git diff --cached --quiet && echo "无变更，跳过 commit" && exit 0
+          git commit -m "chore: auto update banner [skip ci]"
           git push
