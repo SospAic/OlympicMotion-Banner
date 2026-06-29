@@ -107,10 +107,11 @@ jobs:
 
       # ── 9. 保存 artifact ──────────────────────────────────────────────
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: olympicmotion-banner
-          path: dist/banner.png
+          path: dist/
           retention-days: 7
 
       # ── 10. Commit 更新回 repo ────────────────────────────────────────

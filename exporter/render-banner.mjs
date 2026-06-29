@@ -22,6 +22,8 @@ const TARGET_URL = process.env.BANNER_URL ?? "http://localhost:4173/";
 // Ensure output directory exists
 mkdirSync(dirname(OUTPUT), { recursive: true });
 
+console.log(`Target URL: ${TARGET_URL}`);
+
 // ── Server probe ──────────────────────────────────────────────────────────
 async function serverReady(url, tries = 28) {
   for (let i = 0; i < tries; i++) {
@@ -47,7 +49,6 @@ if (!process.env.BANNER_URL) {
     }
   }
 } else {
-  // Remote URL — just wait for it to be reachable
   const reachable = await serverReady(TARGET_URL, 10);
   if (!reachable) {
     throw new Error(`Remote banner URL not reachable: ${TARGET_URL}`);
@@ -61,14 +62,53 @@ const page    = await browser.newPage({
   deviceScaleFactor: 1,
 });
 
-await page.goto(TARGET_URL, { waitUntil: "networkidle", timeout: 30_000 });
+// Collect console errors for debugging
+const pageErrors = [];
+page.on("pageerror",  e => pageErrors.push("pageerror: " + e.message));
+page.on("console",    m => { if (m.type() === "error") pageErrors.push("console: " + m.text()); });
+page.on("requestfailed", r => pageErrors.push("reqfail: " + r.url() + " " + r.failure()?.errorText));
 
-// Wait for fonts, animations and progress bar transition
-await page.waitForTimeout(1200);
+// Navigate — use domcontentloaded first, then wait explicitly
+await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-// Crop to the banner stage element (2560 × 423)
-const stage = await page.$(".banner-stage");
-if (!stage) throw new Error(".banner-stage not found in page");
+// Wait for the app.js module to finish painting
+// data-subs is set by app.js after config loads — wait for it to have real content
+try {
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector("[data-subs]");
+      return el && el.textContent.trim().length > 0 && el.textContent !== "00,000";
+    },
+    { timeout: 15_000 }
+  );
+} catch {
+  // If we can't confirm, take a debug screenshot and log what's there
+  const debugPath = OUTPUT.replace(".png", "-debug.png");
+  await page.screenshot({ path: debugPath, fullPage: false });
+  console.log(`Debug screenshot saved: ${debugPath}`);
+  console.log("Page title:", await page.title());
+  console.log("HTML preview:", (await page.content()).substring(0, 800));
+  if (pageErrors.length) console.log("Page errors:", pageErrors);
+  throw new Error("app.js did not finish painting within 15s — see debug screenshot");
+}
+
+// Extra wait for CSS animations and font rendering
+await page.waitForTimeout(1000);
+
+if (pageErrors.length) {
+  console.warn("Non-fatal page errors:", pageErrors);
+}
+
+// Find and screenshot the banner stage
+const stage = page.locator(".banner-stage").first();
+const count = await stage.count();
+
+if (count === 0) {
+  const debugPath = OUTPUT.replace(".png", "-debug.png");
+  await page.screenshot({ path: debugPath, fullPage: false });
+  console.log("Debug screenshot saved:", debugPath);
+  throw new Error(".banner-stage not found — check debug screenshot");
+}
 
 await stage.screenshot({ path: OUTPUT });
 
