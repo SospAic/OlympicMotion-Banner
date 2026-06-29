@@ -112,7 +112,6 @@ try {
 
 if (!uploadRes.ok) {
   console.error("❌ Banner 上传失败：", JSON.stringify(uploadData, null, 2));
-  // Print diagnostic info
   console.log("\n── 诊断信息 ──");
   console.log("HTTP Status:", uploadRes.status);
   console.log("Channel ID:", CHANNEL_ID);
@@ -124,9 +123,10 @@ if (!uploadRes.ok) {
   process.exit(1);
 }
 
-const bannerUrl = uploadData.url;
+const bannerUrl = uploadData.url ?? uploadData.bannerImageUrl;
 console.log(`✓ Banner 图片上传成功`);
-console.log(`  URL：${bannerUrl}`);
+console.log(`  完整响应：${JSON.stringify(uploadData)}`);
+console.log(`  Banner URL：${bannerUrl}`);
 
 // ── Step 3: Apply banner to channel ──────────────────────────────────────
 console.log("📺 正在将 Banner 应用到频道...");
