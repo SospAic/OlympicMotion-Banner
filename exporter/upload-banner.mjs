@@ -90,7 +90,7 @@ const body = Buffer.concat([
 ]);
 
 const uploadRes = await fetch(
-  "https://www.googleapis.com/upload/youtube/v3/channelBanners/insert?uploadType=multipart&part=snippet",
+  "https://www.googleapis.com/upload/youtube/v3/channelBanners/insert?uploadType=multipart",
   {
     method:  "POST",
     headers: {
