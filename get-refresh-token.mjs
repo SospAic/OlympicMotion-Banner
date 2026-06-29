@@ -16,7 +16,11 @@ import { createInterface } from "node:readline";
 const CLIENT_ID     = process.env.CLIENT_ID     ?? "在此填入你的client_id";
 const CLIENT_SECRET = process.env.CLIENT_SECRET ?? "在此填入你的client_secret";
 const REDIRECT_URI  = "http://localhost:8080";
-const SCOPE         = "https://www.googleapis.com/auth/youtube";
+const SCOPE = [
+  "https://www.googleapis.com/auth/youtube",
+  "https://www.googleapis.com/auth/youtube.upload",
+  "https://www.googleapis.com/auth/youtube.force-ssl",
+].join(" ");
 
 if (CLIENT_ID.startsWith("在此")) {
   console.error("请先设置 CLIENT_ID 和 CLIENT_SECRET 环境变量，或直接修改脚本中的默认值");
