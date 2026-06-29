@@ -15,9 +15,9 @@ import { fileURLToPath }         from "node:url";
 import { spawn }                 from "node:child_process";
 import { chromium }              from "playwright";
 
-const ROOT   = resolve(fileURLToPath(new URL("../", import.meta.url)));
-const OUTPUT = resolve(process.argv[2] ?? "dist/banner.png");
-const URL    = process.env.BANNER_URL ?? "http://localhost:4173/";
+const ROOT       = resolve(fileURLToPath(new URL("../", import.meta.url)));
+const OUTPUT     = resolve(process.argv[2] ?? "dist/banner.png");
+const TARGET_URL = process.env.BANNER_URL ?? "http://localhost:4173/";
 
 // Ensure output directory exists
 mkdirSync(dirname(OUTPUT), { recursive: true });
@@ -34,29 +34,37 @@ async function serverReady(url, tries = 28) {
   return false;
 }
 
-// Start local server if not already running
+// Start local server only when BANNER_URL is not set (local dev mode)
 let proc;
-if (!(await serverReady(URL, 2))) {
-  proc = spawn(process.execPath, ["server.mjs"], {
-    cwd: ROOT, stdio: "ignore", windowsHide: true,
-  });
-  if (!(await serverReady(URL))) {
-    proc.kill();
-    throw new Error(`Preview server did not start at ${URL}`);
+if (!process.env.BANNER_URL) {
+  if (!(await serverReady(TARGET_URL, 2))) {
+    proc = spawn(process.execPath, ["server.mjs"], {
+      cwd: ROOT, stdio: "ignore", windowsHide: true,
+    });
+    if (!(await serverReady(TARGET_URL))) {
+      proc.kill();
+      throw new Error(`Preview server did not start at ${TARGET_URL}`);
+    }
+  }
+} else {
+  // Remote URL — just wait for it to be reachable
+  const reachable = await serverReady(TARGET_URL, 10);
+  if (!reachable) {
+    throw new Error(`Remote banner URL not reachable: ${TARGET_URL}`);
   }
 }
 
 // ── Screenshot ────────────────────────────────────────────────────────────
 const browser = await chromium.launch({ headless: true });
 const page    = await browser.newPage({
-  viewport:        { width: 2560, height: 1440 },
+  viewport:          { width: 2560, height: 1440 },
   deviceScaleFactor: 1,
 });
 
-await page.goto(URL, { waitUntil: "networkidle", timeout: 30_000 });
+await page.goto(TARGET_URL, { waitUntil: "networkidle", timeout: 30_000 });
 
-// Wait for fonts and progress bar animation
-await page.waitForTimeout(800);
+// Wait for fonts, animations and progress bar transition
+await page.waitForTimeout(1200);
 
 // Crop to the banner stage element (2560 × 423)
 const stage = await page.$(".banner-stage");
