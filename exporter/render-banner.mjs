@@ -24,6 +24,26 @@ mkdirSync(dirname(OUTPUT), { recursive: true });
 
 console.log(`Target URL: ${TARGET_URL}`);
 
+// ── Pre-flight check: verify URL returns HTML, not Worker text ────────────
+async function verifyBannerUrl(url) {
+  try {
+    const r = await fetch(url);
+    const ct = r.headers.get("content-type") ?? "";
+    if (!ct.includes("text/html")) {
+      const body = await r.text();
+      throw new Error(
+        `BANNER_URL returned non-HTML content (${ct}).\n` +
+        `Body preview: ${body.substring(0, 200)}\n` +
+        `Make sure BANNER_URL points to Cloudflare PAGES (e.g. https://xxx.pages.dev), ` +
+        `NOT a Cloudflare Worker URL.`
+      );
+    }
+    return true;
+  } catch (e) {
+    throw new Error(`BANNER_URL pre-flight failed: ${e.message}`);
+  }
+}
+
 // ── Server probe ──────────────────────────────────────────────────────────
 async function serverReady(url, tries = 28) {
   for (let i = 0; i < tries; i++) {
@@ -53,6 +73,7 @@ if (!process.env.BANNER_URL) {
   if (!reachable) {
     throw new Error(`Remote banner URL not reachable: ${TARGET_URL}`);
   }
+  await verifyBannerUrl(TARGET_URL);
 }
 
 // ── Screenshot ────────────────────────────────────────────────────────────
