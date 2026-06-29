@@ -1,0 +1,7 @@
+name = "olympicmotion-banner-engine"
+main = "worker/index.js"
+compatibility_date = "2026-06-27"
+
+[vars]
+SUBSCRIBERS = "46812"
+GOAL = "1000000"

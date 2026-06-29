@@ -1,0 +1,98 @@
+name: Generate Banner
+
+on:
+  # Manual trigger — can override subscriber count
+  workflow_dispatch:
+    inputs:
+      subscribers:
+        description: "Subscriber count (leave blank to fetch from YouTube API)"
+        required: false
+        default: ""
+
+  # Auto-run every 6 hours
+  schedule:
+    - cron: "0 */6 * * *"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to commit banner.png back to repo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # ── Fetch live subscriber count from YouTube Data API v3 ──────────
+      # Requires secret: YOUTUBE_API_KEY  and  YOUTUBE_CHANNEL_ID
+      - name: Fetch subscriber count
+        id: yt
+        if: ${{ github.event.inputs.subscribers == '' }}
+        run: |
+          SUBS=$(node -e "
+            const key = process.env.YOUTUBE_API_KEY;
+            const cid = process.env.YOUTUBE_CHANNEL_ID;
+            if (!key || !cid) { process.stdout.write('0'); process.exit(0); }
+            fetch('https://www.googleapis.com/youtube/v3/channels?part=statistics&id=' + cid + '&key=' + key)
+              .then(r => r.json())
+              .then(d => process.stdout.write(d.items?.[0]?.statistics?.subscriberCount ?? '0'))
+              .catch(() => process.stdout.write('0'));
+          ")
+          echo "subs=$SUBS" >> $GITHUB_OUTPUT
+        env:
+          YOUTUBE_API_KEY:    ${{ secrets.YOUTUBE_API_KEY }}
+          YOUTUBE_CHANNEL_ID: ${{ secrets.YOUTUBE_CHANNEL_ID }}
+
+      # ── Manual override wins; API result is fallback ───────────────────
+      - name: Write subscriber count to config
+        run: |
+          node --input-type=module << 'EOF'
+          import { readFileSync, writeFileSync } from "fs";
+          const path = "public/config/banner.config.json";
+          const cfg  = JSON.parse(readFileSync(path, "utf8"));
+          const manual = process.env.MANUAL_SUBS;
+          const auto   = process.env.AUTO_SUBS;
+          const subs   = Number(manual || auto || cfg.data?.subs || 0);
+          cfg.data = { ...cfg.data, subs };
+          writeFileSync(path, JSON.stringify(cfg, null, 2) + "\n");
+          console.log(`Subscriber count set to ${subs}`);
+          EOF
+        env:
+          MANUAL_SUBS: ${{ github.event.inputs.subscribers }}
+          AUTO_SUBS:   ${{ steps.yt.outputs.subs }}
+
+      - name: Start preview server
+        run: node server.mjs &
+
+      - name: Render banner
+        run: node exporter/render-banner.mjs dist/banner.png
+        env:
+          BANNER_URL: ${{ secrets.BANNER_URL }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: olympicmotion-banner
+          path: dist/banner.png
+          retention-days: 30
+
+      # ── Commit banner.png back to repo (optional) ─────────────────────
+      - name: Commit updated banner
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/banner.png public/config/banner.config.json
+          git diff --cached --quiet || git commit -m "chore: update banner [skip ci]"
+          git push

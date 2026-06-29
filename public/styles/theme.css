@@ -1,0 +1,59 @@
+/* ═══════════════════════════════════════════════
+   THEME — design tokens & global reset
+   OlympicMotion Banner Engine Pro
+   ═══════════════════════════════════════════════ */
+
+:root {
+  /* Canvas dimensions (YouTube) */
+  --canvas-w:  2560px;
+  --canvas-h:  1440px;
+  --banner-h:   423px;  /* safe-area height */
+  --safe-w:    1546px;  /* YouTube safe area */
+
+  /* ── Gold palette ── */
+  --gold-50:  #fffae8;
+  --gold-100: #ffe896;
+  --gold-200: #ffc94a;
+  --gold-300: #f5a615;
+  --gold-400: #d48200;
+  --gold-500: #a85f00;
+  --gold-600: #7a4200;
+
+  /* ── Dark ink ── */
+  --ink-900: #010201;
+  --ink-800: #060706;
+  --ink-700: #0e0f0d;
+
+  /* ── Utility ── */
+  --line:         rgba(255, 201, 74, .40);
+  --line-bright:  rgba(255, 201, 74, .70);
+  --glass:        rgba(8, 9, 7, .78);
+  --glass-light:  rgba(15, 16, 12, .60);
+
+  /* ── Typography ── */
+  --font-display: "Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+  --font-body:    "Inter", Arial, sans-serif;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  width: 100%;
+  min-height: 100vh;
+  background: #030303;
+  color: #fff;
+  font-family: var(--font-body);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+svg  { display: block; flex-shrink: 0; }
+img  { display: block; max-width: 100%; }

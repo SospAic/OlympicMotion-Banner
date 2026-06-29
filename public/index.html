@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OlympicMotion Banner Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/theme.css">
+    <link rel="stylesheet" href="/styles/animation.css">
+    <link rel="stylesheet" href="/styles/banner.css">
+  </head>
+  <body>
+    <main class="youtube-canvas" aria-label="OlympicMotion YouTube banner preview">
+      <section class="banner-stage" data-export-root>
+        <div class="banner-bg" aria-hidden="true">
+          <div class="stadium-light light-left"></div>
+          <div class="stadium-light light-right"></div>
+          <div class="speed-lines"></div>
+          <div class="athlete athlete-left"></div>
+          <div class="athlete athlete-center"></div>
+          <div class="athlete athlete-right"></div>
+          <div class="grain"></div>
+        </div>
+
+        <div class="safe-area" data-safe-area>
+
+          <!-- ── LEFT: Brand ── -->
+          <section class="brand-panel">
+            <div class="logo-orbit">
+              <div class="logo-ring"></div>
+              <img class="logo-img" data-logo alt="OlympicMotion logo">
+            </div>
+            <div class="brand-copy">
+              <h1>
+                <span data-brand-line1>Olympic</span>
+                <strong data-brand-line2>Motion</strong>
+              </h1>
+              <p data-slogan>Every Play Has A <em data-slogan-accent>Story</em></p>
+            </div>
+          </section>
+
+          <!-- ── MIDDLE: Mission + Stats ── -->
+          <section class="mission-panel">
+            <div class="mission-kicker"><span data-mission-label>Mission</span></div>
+            <h2 data-mission-title>Road To <span>1M</span> Champions</h2>
+
+            <div class="subscriber-card hud-panel">
+              <!-- Progress bar fills the card, number floats inside it -->
+              <div class="sub-progress-wrap">
+                <div class="sub-progress-track">
+                  <div class="sub-progress-fill" data-progress-fill></div>
+                  <!-- Number centered over the bar -->
+                  <div class="sub-progress-label">
+                    <strong data-subs>00,000</strong>
+                    <span data-subscribers-label>Subscribers</span>
+                  </div>
+                </div>
+              </div>
+              <!-- Right: next goal info -->
+              <div class="next-goal">
+                <span data-next-goal-label>Next Goal</span>
+                <strong data-next-goal>50K</strong>
+                <em data-remaining>0 To Go!</em>
+              </div>
+            </div>
+
+            <a class="cta-strip" href="https://www.youtube.com/" aria-label="Subscribe to OlympicMotion">
+              <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 11h24l12 13-12 13H6l12-13L6 11Zm18 0h7l12 13-12 13h-7l12-13L24 11Z"/></svg>
+              <span data-cta>Subscribe &amp; Be Part Of The Journey</span>
+              <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M25 42a5 5 0 0 0 5-5H20a5 5 0 0 0 5 5Zm15-12-5-7v-8c0-6-4-11-10-12-6 1-10 6-10 12v8l-5 7v3h30v-3Z"/></svg>
+            </a>
+          </section>
+
+          <!-- ── RIGHT: Achievements ── -->
+          <section class="achievement-panel hud-panel">
+            <div class="achievement-title">
+              <span aria-hidden="true">★ ★</span>
+              <h3 data-achievements-label>Achievements</h3>
+              <span aria-hidden="true">★ ★</span>
+            </div>
+            <div class="badge-grid" data-achievements></div>
+
+            <!-- Social icons block replacing manifesto text -->
+            <div class="social-block">
+              <p class="social-label" data-social-label>Follow &amp; Connect</p>
+              <div class="social-icons" data-social-icons>
+                <!-- injected by app.js -->
+              </div>
+            </div>
+          </section>
+
+          <!-- ── BOTTOM: Feature strip ── -->
+          <nav class="feature-strip" aria-label="Content pillars" data-features>
+            <span><svg viewBox="0 0 48 48"><path d="M16 42h16v-5H16v5Zm-7-5h30v-5H9v5Zm7-9h16c8-6 12-13 12-22H31v6h6c-1 5-4 9-8 12H19c-4-3-7-7-8-12h6V6H4c0 9 4 16 12 22Z"/></svg>Epic Moments</span>
+            <span><svg viewBox="0 0 48 48"><path d="M7 13h34v27H7V13Zm0-5h7l4 5h-7L7 8Zm12 0h7l4 5h-7l-4-5Zm12 0h7l4 5h-7l-4-5ZM14 20v13l13-7-13-6Z"/></svg>Untold Stories</span>
+            <span><svg viewBox="0 0 48 48"><path d="m13 5 11 18L35 5h7L29 27a12 12 0 1 1-10 0L6 5h7Zm11 38a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>Olympic Legends</span>
+            <span><svg viewBox="0 0 48 48"><path d="M16 12h4l3-5h8l3 5h5a5 5 0 0 1 5 5v20a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V17a5 5 0 0 1 5-5h7Zm8 25a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg>Behind The Scenes</span>
+            <span><svg viewBox="0 0 48 48"><path d="M10 8h4v5h20V8h4v5h4v29H6V13h4V8Zm28 14H10v16h28V22Zm-23 4h6v5h-6v-5Zm10 0h6v5h-6v-5Z"/></svg>Weekly Uploads</span>
+          </nav>
+
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

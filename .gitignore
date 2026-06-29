@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+# banner.png is committed by GitHub Actions — only exclude local test screenshots
+dist/preview-*.png
+dist/overflow-*.png
+dist/layout-*.png
+
+# Wrangler local state
+.wrangler/
+
+# Environment secrets
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json

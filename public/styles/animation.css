@@ -1,0 +1,73 @@
+/* ═══════════════════════════════════════════════
+   ANIMATIONS
+   OlympicMotion Banner Engine Pro
+   ═══════════════════════════════════════════════ */
+
+/* ── Gold shimmer sweep across HUD cards ── */
+@keyframes goldSweep {
+  0%   { transform: translateX(-160%) skewX(-18deg); opacity: 0; }
+  15%  { opacity: .90; }
+  60%  { opacity: .30; }
+  100% { transform: translateX(200%) skewX(-18deg); opacity: 0; }
+}
+
+/* ── Background haze drift ── */
+@keyframes hazeDrift {
+  0%   { transform: translate3d(-1.5%, 1.5%, 0) scale(1.0); }
+  50%  { transform: translate3d( 1.5%,-1.5%, 0) scale(1.02); }
+  100% { transform: translate3d(-1.5%, 1.5%, 0) scale(1.0); }
+}
+
+/* ── Logo ring pulse glow ── */
+@keyframes ringPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255,196,52,.50),
+                inset 0 0 28px rgba(255,196,52,.22);
+  }
+  50% {
+    box-shadow: 0 0 52px rgba(255,196,52,.95),
+                inset 0 0 38px rgba(255,196,52,.38);
+  }
+}
+
+/* ── Slow decorative orbit ring spin ── */
+@keyframes orbitSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Progress bar stripe scroll ── */
+@keyframes barSpark {
+  from { background-position-x: 0; }
+  to   { background-position-x: 40px; }
+}
+
+/* ── Badge entrance pop-in ── */
+@keyframes badgePop {
+  0%   { transform: translateY(12px) scale(.78); opacity: 0; }
+  65%  { transform: translateY(-3px) scale(1.06); }
+  100% { transform: none; opacity: 1; }
+}
+
+/* ── Subscriber number flash on load ── */
+@keyframes numFlash {
+  0%   { opacity: .4; }
+  60%  { opacity: 1; color: var(--gold-100);
+         text-shadow: 0 0 28px rgba(255,196,42,.85); }
+  100% { opacity: 1; }
+}
+
+/* ── CTA border pulse ── */
+@keyframes ctaPulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(255,196,42,.25); }
+  50%       { box-shadow: 0 0 34px rgba(255,196,42,.70); }
+}
+
+/* ── Reduced-motion override ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:       .001ms !important;
+    animation-iteration-count: 1     !important;
+    transition-duration:      .001ms !important;
+  }
+}

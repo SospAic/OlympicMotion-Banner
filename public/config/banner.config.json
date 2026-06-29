@@ -1,0 +1,47 @@
+{
+  "brand": {
+    "channelName": "OlympicMotion",
+    "slogan": "Every Play Has A Story",
+    "sloganAccent": "Story",
+    "logo": "/assets/logo.svg",
+    "brandLine1": "Olympic",
+    "brandLine2": "Motion"
+  },
+  "mission": {
+    "label": "Mission",
+    "title": "Road To <span>1M</span> Champions",
+    "goal": 1000000,
+    "cta": "Subscribe & Be Part Of The Journey",
+    "subscribersLabel": "Subscribers",
+    "nextGoalLabel": "Next Goal",
+    "targetLabel": "Target"
+  },
+  "data": {
+    "subs": 46812
+  },
+  "social": {
+    "youtube":   "https://youtube.com/@OlympicMotion",
+    "instagram": "https://instagram.com/OlympicMotion",
+    "tiktok":    "https://tiktok.com/@OlympicMotion",
+    "x":         "https://x.com/OlympicMotion"
+  },
+  "features": [
+    { "icon": "trophy",    "label": "Epic Moments" },
+    { "icon": "film",      "label": "Untold Stories" },
+    { "icon": "medal",     "label": "Olympic Legends" },
+    { "icon": "camera",    "label": "Behind The Scenes" },
+    { "icon": "calendar",  "label": "Weekly Uploads" }
+  ],
+  "achievements": [
+    { "label": "100",  "caption": "Subscribers", "threshold": 100 },
+    { "label": "1K",   "caption": "Subscribers", "threshold": 1000 },
+    { "label": "10K",  "caption": "Subscribers", "threshold": 10000 },
+    { "label": "50K",  "caption": "Subscribers", "threshold": 50000 },
+    { "label": "100K", "caption": "Subscribers", "threshold": 100000 },
+    { "label": "500K", "caption": "Subscribers", "threshold": 500000 },
+    { "label": "1M",   "caption": "Subscribers", "threshold": 1000000 }
+  ],
+  "theme": "gold",
+  "showSafeArea": false,
+  "showProgressPercent": false
+}
