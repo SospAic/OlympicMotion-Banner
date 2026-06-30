@@ -128,7 +128,8 @@ console.log("══════════════════════�
 // ── Start callback HTTP server ────────────────────────────────────────────
 console.log(`⏳ 正在监听授权回调（端口 ${CALLBACK_PORT}）...\n`);
 
-const authCode = await new Promise((resolve, reject) => {  const server = createServer((req, res) => {
+const authCode = await new Promise((resolve, reject) => {
+  const server = createServer((req, res) => {
     const url   = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
     const code  = url.searchParams.get("code");
     const error = url.searchParams.get("error");
@@ -136,8 +137,7 @@ const authCode = await new Promise((resolve, reject) => {  const server = create
     if (error) {
       res.writeHead(400, { "content-type": "text/html; charset=utf-8" });
       res.end(`<h2>❌ 授权失败：${error}</h2><p>请重新运行脚本</p>`);
-      server.close();
-      reject(new Error("授权被拒绝：" + error));
+      server.close(() => reject(new Error("授权被拒绝：" + error)));
       return;
     }
 
@@ -150,18 +150,20 @@ const authCode = await new Promise((resolve, reject) => {  const server = create
         <p style="color:#888;font-size:12px">此页面可以关闭</p>
         </body></html>
       `);
-      server.close();
-      resolve(code);
+      server.close(() => resolve(code));
     }
   });
 
-  server.listen(CALLBACK_PORT, "127.0.0.1", () => {});
+  // Listen on all interfaces so Caddy can reach it
+  server.listen(CALLBACK_PORT, "0.0.0.0", () => {
+    console.log(`  HTTP 回调服务器已启动（端口 ${CALLBACK_PORT}）`);
+  });
 
-  // Timeout after 10 minutes
-  setTimeout(() => {
-    server.close();
-    reject(new Error("超时：10分钟内未完成授权"));
+  // Timeout after 10 minutes — unref so it doesn't block process exit
+  const timer = setTimeout(() => {
+    server.close(() => reject(new Error("超时：10分钟内未完成授权")));
   }, 10 * 60 * 1000);
+  timer.unref();
 });
 
 console.log("✓ 授权码已接收，正在换取 tokens...\n");
