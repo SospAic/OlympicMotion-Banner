@@ -71,18 +71,62 @@ info "检测到系统：${OS_ID:-unknown} ${OS_VERSION} | 包管理器：${PKG_M
 
 # ── Node.js install helper ────────────────────────────────────
 _install_node() {
-  info "安装 Node.js ${NODE_VERSION}..."
-  case "$PKG_MANAGER" in
-    apt)
-      curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-      apt-get install -y nodejs
-      ;;
-    dnf|yum)
-      # NodeSource rpm repo
-      curl -fsSL "https://rpm.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-      $PKG_MANAGER install -y nodejs
-      ;;
-  esac
+  info "安装 Node.js..."
+
+  # CentOS 7 / RHEL 7: glibc too old for Node 22, use nvm + Node 18
+  if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+    warn "CentOS 7 的 glibc 版本过低（2.17），Node.js 22 需要 glibc 2.28+"
+    info "改用 nvm 安装 Node.js 18（CentOS 7 最高可用版本）"
+
+    # Install build tools needed by nvm
+    yum install -y -q curl git gcc gcc-c++ make 2>/dev/null || true
+
+    # Install nvm
+    export NVM_DIR="${HOME}/.nvm"
+    curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh" | bash
+
+    # Load nvm in current shell
+    source "${NVM_DIR}/nvm.sh" 2>/dev/null || true
+
+    # Install Node 18 (last version with CentOS 7 glibc 2.17 support)
+    nvm install 18
+    nvm use 18
+    nvm alias default 18
+
+    # Make node/npm available system-wide
+    NODE_BIN=$(nvm which current)
+    NODE_DIR=$(dirname "$NODE_BIN")
+    if [[ ! -f /usr/local/bin/node ]]; then
+      ln -sf "$NODE_BIN" /usr/local/bin/node
+      ln -sf "${NODE_DIR}/npm"  /usr/local/bin/npm
+      ln -sf "${NODE_DIR}/npx"  /usr/local/bin/npx
+    fi
+
+    # Add nvm to shell profile for future sessions
+    for profile in ~/.bashrc ~/.bash_profile ~/.profile; do
+      if [[ -f "$profile" ]] && ! grep -q "NVM_DIR" "$profile"; then
+        cat >> "$profile" << 'NVMEOF'
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+NVMEOF
+      fi
+    done
+
+    NODE_VERSION=18  # update for version check
+
+  else
+    # All other systems: use NodeSource rpm/deb repo
+    case "$PKG_MANAGER" in
+      apt)
+        curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
+        apt-get install -y nodejs
+        ;;
+      dnf|yum)
+        curl -fsSL "https://rpm.nodesource.com/setup_${NODE_VERSION}.x" | bash -
+        $PKG_MANAGER install -y nodejs
+        ;;
+    esac
+  fi
 }
 
 # ── Check root ────────────────────────────────────────────────
@@ -108,11 +152,17 @@ case "$PKG_MANAGER" in
 esac
 success "系统包索引已更新"
 
-# ── Step 2: Install Node.js ───────────────────────────────────
-step "步骤 2/7：安装 Node.js ${NODE_VERSION}"
+# ── Step 2/7：安装 Node.js ───────────────────────────────────
+step "步骤 2/7：安装 Node.js"
+
+# Load nvm if already installed
+export NVM_DIR="${HOME}/.nvm"
+[[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+
 if command -v node &>/dev/null; then
   CURRENT_NODE=$(node --version | cut -d. -f1 | tr -d 'v')
-  if [[ "$CURRENT_NODE" -ge "$NODE_VERSION" ]] 2>/dev/null; then
+  MIN_NODE=18
+  if [[ "$CURRENT_NODE" -ge "$MIN_NODE" ]] 2>/dev/null; then
     success "Node.js $(node --version) 已安装，跳过"
   else
     warn "Node.js 版本过低 ($(node --version))，重新安装..."
@@ -121,6 +171,8 @@ if command -v node &>/dev/null; then
   fi
 else
   _install_node
+  # Reload nvm after install
+  [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
   success "Node.js $(node --version) 安装完成"
 fi
 
@@ -159,6 +211,8 @@ case "$PKG_MANAGER" in
     if [[ "$OS_ID" == "centos" && "$OS_VERSION" == "7" ]]; then
       yum install -y \
         libXScrnSaver GConf2 \
+        xorg-x11-fonts-Type1 xorg-x11-fonts-misc \
+        dbus-x11 \
         2>/dev/null || true
     fi
     ;;
@@ -181,8 +235,20 @@ cd "$INSTALL_DIR"
 
 # ── Step 5: Install npm deps + Playwright browser ────────────
 step "步骤 5/7：安装 Node 依赖和 Playwright 浏览器"
+
+# Reload nvm if needed
+[[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+
 npm ci --silent
-node node_modules/playwright/cli.js install chromium
+
+# CentOS 7: use Playwright's built-in deps installer
+if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+  info "CentOS 7：使用 Playwright 自带依赖安装方式..."
+  node node_modules/playwright/cli.js install chromium --with-deps 2>/dev/null || \
+  node node_modules/playwright/cli.js install chromium
+else
+  node node_modules/playwright/cli.js install chromium
+fi
 success "依赖安装完成"
 
 # ── Step 5.5: Install pm2 for daemon management ───────────────
