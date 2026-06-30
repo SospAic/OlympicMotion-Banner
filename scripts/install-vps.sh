@@ -152,6 +152,14 @@ case "$PKG_MANAGER" in
   yum)
     yum check-update -q || true
     yum install -y -q epel-release 2>/dev/null || true
+    # CentOS 7: upgrade git to 2.x via IUS repo (system git 1.8.3 too old)
+    if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+      info "CentOS 7：升级 Git 到 2.x（系统版本 1.8.3 过旧）..."
+      yum install -y -q https://repo.ius.io/ius-release-el7.rpm 2>/dev/null || \
+      yum install -y -q https://dl.iuscommunity.org/pub/ius/stable/CentOS/7/x86_64/ius-release-1.0-15.ius.centos7.noarch.rpm 2>/dev/null || true
+      yum install -y -q git2u git2u-core 2>/dev/null || \
+      yum install -y -q git224 2>/dev/null || true
+    fi
     ;;
 esac
 success "系统包索引已更新"
@@ -236,7 +244,7 @@ success "系统依赖安装完成"
 step "步骤 4/6：获取项目代码"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   info "项目已存在，更新到最新版本..."
-  git -C "$INSTALL_DIR" pull --rebase origin main
+  cd "$INSTALL_DIR" && git pull --rebase origin main
   success "代码已更新到最新版本"
 else
   info "克隆项目到 ${INSTALL_DIR}..."
