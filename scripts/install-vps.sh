@@ -257,8 +257,24 @@ cd "$INSTALL_DIR"
 # ── Step 5: Install npm deps + Playwright browser ────────────
 step "步骤 5/7：安装 Node 依赖和 Playwright 浏览器"
 
-# Reload nvm if needed
+# Reload nvm and force PATH for CentOS 7
+export NVM_DIR="${HOME}/.nvm"
 [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+
+if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+  NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
+  if [[ -n "$NVM_NODE" ]]; then
+    export PATH="${NVM_DIR}/versions/node/${NVM_NODE}/bin:${PATH}"
+    ln -sf "${NVM_DIR}/versions/node/${NVM_NODE}/bin/node" /usr/local/bin/node
+    ln -sf "${NVM_DIR}/versions/node/${NVM_NODE}/bin/npm"  /usr/local/bin/npm
+    ln -sf "${NVM_DIR}/versions/node/${NVM_NODE}/bin/npx"  /usr/local/bin/npx
+    info "已激活 nvm Node.js ${NVM_NODE}"
+  else
+    error "未找到 nvm 安装的 Node.js，请重新运行脚本"
+  fi
+fi
+
+node --version || error "node 命令不可用"
 
 npm ci --silent
 
@@ -278,6 +294,10 @@ step "步骤 6/7：安装 PM2 进程管理器"
 # Reload nvm before any npm global install
 export NVM_DIR="${HOME}/.nvm"
 [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+  NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
+  [[ -n "$NVM_NODE" ]] && export PATH="${NVM_DIR}/versions/node/${NVM_NODE}/bin:${PATH}"
+fi
 
 if command -v pm2 &>/dev/null; then
   success "PM2 已安装：$(pm2 --version)"
