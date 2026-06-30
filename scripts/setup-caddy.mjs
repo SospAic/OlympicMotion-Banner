@@ -23,7 +23,7 @@ const ENV_FILE   = resolve(ROOT, ".env");
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const rl  = createInterface({ input: process.stdin, output: process.stdout });
-const ask = q => new Promise(r => rl.question(q, r));
+const ask = q => new Promise(r => rl.question(q, a => r(a.trim().replace(/\r/g, ""))));
 
 function loadEnv() {
   if (!existsSync(ENV_FILE)) return {};
@@ -118,7 +118,7 @@ console.log(caddyfile);
 console.log("─────────────────────────────────────────────");
 
 const confirm = await ask("确认写入 /etc/caddy/Caddyfile？(y/N)：");
-if (confirm.toLowerCase() !== "y") {
+if (!confirm.trim().toLowerCase().startsWith("y")) {
   console.log("已取消");
   rl.close();
   process.exit(0);

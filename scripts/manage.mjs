@@ -42,7 +42,7 @@ const dim    = s => `${C.dim}${s}${C.reset}`;
 
 // ── readline ──────────────────────────────────────────────────────────────
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-const ask = q => new Promise(r => rl.question(q, r));
+const ask = q => new Promise(r => rl.question(q, a => r(a.trim().replace(/\r/g, ""))));
 
 function clear() { process.stdout.write("\x1b[2J\x1b[H"); }
 
