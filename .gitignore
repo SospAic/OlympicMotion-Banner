@@ -13,6 +13,8 @@ dist/layout-*.png
 # Environment secrets
 .env
 .env.*
+# Keep .env.example as template (safe to commit, no real values)
+!.env.example
 
 # Logs
 *.log
