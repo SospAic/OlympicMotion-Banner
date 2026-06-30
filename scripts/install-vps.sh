@@ -8,7 +8,7 @@
 #   chmod +x install.sh && bash install.sh
 # ═══════════════════════════════════════════════════════════════
 
-set -euo pipefail
+set -uo pipefail
 
 REPO_URL="https://github.com/SospAic/OlympicMotion-Banner.git"
 INSTALL_DIR="${HOME}/OlympicMotion-Banner"
@@ -37,37 +37,57 @@ OS_ID=""
 OS_VERSION=""
 PKG_MANAGER=""
 
+# Method 1: parse /etc/os-release manually (avoid source issues with set -e)
 if [[ -f /etc/os-release ]]; then
-  source /etc/os-release
-  OS_ID="${ID,,}"        # lowercase: ubuntu, debian, centos, rhel, fedora, rocky, almalinux
-  OS_VERSION="${VERSION_ID%%.*}"  # major version only
-elif [[ -f /etc/redhat-release ]]; then
-  OS_ID="centos"
-  OS_VERSION=$(grep -oE '[0-9]+' /etc/redhat-release | head -1)
+  OS_ID=$(grep    -oP '(?<=^ID=)["\047]?\K[^"'\'']+' /etc/os-release | tr '[:upper:]' '[:lower:]' || true)
+  OS_VERSION=$(grep -oP '(?<=^VERSION_ID=)["\047]?\K[^"'\'']+' /etc/os-release | cut -d. -f1 || true)
 fi
 
+# Method 2: fallback to /etc/redhat-release
+if [[ -z "$OS_ID" && -f /etc/redhat-release ]]; then
+  if grep -qi "centos" /etc/redhat-release; then
+    OS_ID="centos"
+  elif grep -qi "red hat" /etc/redhat-release; then
+    OS_ID="rhel"
+  fi
+  OS_VERSION=$(grep -oE '[0-9]+' /etc/redhat-release | head -1 || true)
+fi
+
+# Method 3: direct command detection
+if [[ -z "$OS_ID" ]]; then
+  if command -v apt-get &>/dev/null; then OS_ID="ubuntu"
+  elif command -v dnf   &>/dev/null; then OS_ID="fedora"
+  elif command -v yum   &>/dev/null; then OS_ID="centos"
+  fi
+fi
+
+# Ensure OS_VERSION is a plain integer
+OS_VERSION="${OS_VERSION//[^0-9]/}"
+OS_VERSION="${OS_VERSION:-0}"
+
+# Set package manager
 case "$OS_ID" in
-  ubuntu|debian|linuxmint)
+  ubuntu|debian|linuxmint|pop)
     PKG_MANAGER="apt"
     ;;
-  centos|rhel|fedora|rocky|almalinux|ol)
-    PKG_MANAGER="yum"
-    # CentOS 8+ / RHEL 8+ use dnf
-    if [[ "$OS_VERSION" -ge 8 ]] 2>/dev/null; then
+  centos|rhel|fedora|rocky|almalinux|ol|amzn)
+    if [[ "$OS_VERSION" -ge 8 ]]; then
       PKG_MANAGER="dnf"
+    else
+      PKG_MANAGER="yum"
     fi
     ;;
   *)
-    warn "未识别的系统：${OS_ID}，尝试自动检测包管理器"
-    if command -v dnf  &>/dev/null; then PKG_MANAGER="dnf"
-    elif command -v yum  &>/dev/null; then PKG_MANAGER="yum"
+    warn "未识别的系统：'${OS_ID}'，尝试自动检测..."
+    if   command -v dnf     &>/dev/null; then PKG_MANAGER="dnf"
+    elif command -v yum     &>/dev/null; then PKG_MANAGER="yum"
     elif command -v apt-get &>/dev/null; then PKG_MANAGER="apt"
-    else error "无法确定包管理器，请手动安装依赖"
-    fi
+    else error "无法确定包管理器，请手动安装"; fi
     ;;
 esac
 
-info "检测到系统：${OS_ID:-unknown} ${OS_VERSION} | 包管理器：${PKG_MANAGER}"
+info "系统：${OS_ID:-unknown} v${OS_VERSION} | 包管理器：${PKG_MANAGER}"
+info "CentOS 7 检测：OS_ID='${OS_ID}' OS_VERSION='${OS_VERSION}'"
 
 # ── Node.js install helper ────────────────────────────────────
 _install_node() {
