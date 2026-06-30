@@ -49,6 +49,16 @@ if (!USE_DOMAIN) {
   console.warn("   建议先运行：node scripts/setup-caddy.mjs\n");
 } else {
   console.log(`\n  回调地址：${REDIRECT_URI}`);
+console.log(`\n  💡 确认清单：`);
+if (USE_DOMAIN) {
+  console.log(`  1. DNS: ${DOMAIN} 的 A 记录已指向此 VPS`);
+  console.log(`  2. 防火墙: 端口 80/443 已开放（Caddy 需要）`);
+  console.log(`  3. Caddy: systemctl status caddy（应为 active）`);
+  console.log(`  4. Google Cloud Console: 已添加回调地址 ${REDIRECT_URI}`);
+} else {
+  console.log(`  1. SSH 隧道: ssh -L ${CALLBACK_PORT}:localhost:${CALLBACK_PORT} -N root@${vpsIp}`);
+  console.log(`  2. 防火墙: 不需要开放端口（通过 SSH 隧道）`);
+}
 }
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube",
@@ -155,8 +165,25 @@ const authCode = await new Promise((resolve, reject) => {
   });
 
   // Listen on all interfaces so Caddy can reach it
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`❌ 端口 ${CALLBACK_PORT} 已被占用，请先释放：`);
+      console.error(`   kill $(lsof -ti:${CALLBACK_PORT})`);
+    } else {
+      console.error("❌ 服务器错误：", err.message);
+    }
+    reject(err);
+  });
+
   server.listen(CALLBACK_PORT, "0.0.0.0", () => {
-    console.log(`  HTTP 回调服务器已启动（端口 ${CALLBACK_PORT}）`);
+    console.log(`  ✓ HTTP 回调服务器已启动，监听 0.0.0.0:${CALLBACK_PORT}`);
+    console.log(`  ✓ 等待 Google 授权回调...\n`);
+    if (USE_DOMAIN) {
+      console.log(`  回调地址：${REDIRECT_URI}`);
+    } else {
+      console.log(`  本地测试（SSH 隧道模式）：`);
+      console.log(`  curl http://localhost:${CALLBACK_PORT}/callback?code=test`);
+    }
   });
 
   // Timeout after 10 minutes — unref so it doesn't block process exit
