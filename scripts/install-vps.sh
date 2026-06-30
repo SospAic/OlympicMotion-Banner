@@ -75,8 +75,8 @@ _install_node() {
 
   # CentOS 7 / RHEL 7: glibc too old for Node 22, use nvm + Node 18
   if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
-    warn "CentOS 7 的 glibc 版本过低（2.17），Node.js 22 需要 glibc 2.28+"
-    info "改用 nvm 安装 Node.js 18（CentOS 7 最高可用版本）"
+    warn "CentOS 7 的 glibc 版本过低（2.17）"
+    info "Node.js 18/22 需要 glibc 2.25+，改用 Node.js 16（CentOS 7 最高兼容版本）"
 
     # Install build tools needed by nvm
     yum install -y -q curl git gcc gcc-c++ make 2>/dev/null || true
@@ -93,10 +93,10 @@ _install_node() {
     export NVM_DIR="${HOME}/.nvm"
     source "${NVM_DIR}/nvm.sh"
 
-    # Install Node 18
-    nvm install 18
-    nvm use 18
-    nvm alias default 18
+    # Install Node 16 (last version compatible with glibc 2.17)
+    nvm install 16
+    nvm use 16
+    nvm alias default 16
 
     # Verify
     if ! node --version &>/dev/null; then
@@ -172,10 +172,10 @@ step "步骤 2/7：安装 Node.js"
 export NVM_DIR="${HOME}/.nvm"
 [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
 
-# CentOS 7: ALWAYS use nvm regardless of existing node
+# CentOS 7: ALWAYS use nvm + Node 16 (only glibc 2.17 compatible version)
 if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
-  if command -v nvm &>/dev/null && nvm which 18 &>/dev/null 2>&1; then
-    nvm use 18 --silent
+  if command -v nvm &>/dev/null && nvm which 16 &>/dev/null 2>&1; then
+    nvm use 16 --silent
     success "Node.js $(node --version) 已通过 nvm 安装，跳过"
   else
     _install_node
@@ -263,7 +263,9 @@ export NVM_DIR="${HOME}/.nvm"
 [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
 
 if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
-  NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
+  NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | grep "^v16" | sort -V | tail -1)
+  # fallback: any installed version
+  [[ -z "$NVM_NODE" ]] && NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
   if [[ -n "$NVM_NODE" ]]; then
     export PATH="${NVM_DIR}/versions/node/${NVM_NODE}/bin:${PATH}"
     rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx
@@ -297,7 +299,8 @@ step "步骤 6/7：安装 PM2 进程管理器"
 export NVM_DIR="${HOME}/.nvm"
 [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
 if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
-  NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
+  NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | grep "^v16" | sort -V | tail -1)
+  [[ -z "$NVM_NODE" ]] && NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
   [[ -n "$NVM_NODE" ]] && export PATH="${NVM_DIR}/versions/node/${NVM_NODE}/bin:${PATH}"
 fi
 
