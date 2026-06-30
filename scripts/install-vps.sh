@@ -81,38 +81,42 @@ _install_node() {
     # Install build tools needed by nvm
     yum install -y -q curl git gcc gcc-c++ make 2>/dev/null || true
 
+    # Remove broken system node if present
+    yum remove -y nodejs npm 2>/dev/null || true
+    rm -f /usr/bin/node /usr/local/bin/node 2>/dev/null || true
+
     # Install nvm
     export NVM_DIR="${HOME}/.nvm"
     curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh" | bash
 
     # Load nvm in current shell
-    source "${NVM_DIR}/nvm.sh" 2>/dev/null || true
+    export NVM_DIR="${HOME}/.nvm"
+    source "${NVM_DIR}/nvm.sh"
 
-    # Install Node 18 (last version with CentOS 7 glibc 2.17 support)
+    # Install Node 18
     nvm install 18
     nvm use 18
     nvm alias default 18
 
-    # Make node/npm available system-wide
-    NODE_BIN=$(nvm which current)
-    NODE_DIR=$(dirname "$NODE_BIN")
-    if [[ ! -f /usr/local/bin/node ]]; then
-      ln -sf "$NODE_BIN" /usr/local/bin/node
-      ln -sf "${NODE_DIR}/npm"  /usr/local/bin/npm
-      ln -sf "${NODE_DIR}/npx"  /usr/local/bin/npx
+    # Verify
+    if ! node --version &>/dev/null; then
+      error "Node.js 安装失败，请检查 nvm 日志"
     fi
 
-    # Add nvm to shell profile for future sessions
-    for profile in ~/.bashrc ~/.bash_profile ~/.profile; do
+    # Make node/npm available system-wide via symlinks
+    NODE_BIN=$(nvm which current)
+    NODE_DIR=$(dirname "$NODE_BIN")
+    ln -sf "$NODE_BIN"           /usr/local/bin/node
+    ln -sf "${NODE_DIR}/npm"     /usr/local/bin/npm
+    ln -sf "${NODE_DIR}/npx"     /usr/local/bin/npx
+
+    # Add nvm to shell profiles
+    for profile in ~/.bashrc ~/.bash_profile; do
       if [[ -f "$profile" ]] && ! grep -q "NVM_DIR" "$profile"; then
-        cat >> "$profile" << 'NVMEOF'
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
-NVMEOF
+        printf '\nexport NVM_DIR="$HOME/.nvm"\n[ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"\n' >> "$profile"
       fi
     done
-
-    NODE_VERSION=18  # update for version check
+    info "nvm 已写入 ~/.bashrc，新终端自动生效"
 
   else
     # All other systems: use NodeSource rpm/deb repo
@@ -159,7 +163,17 @@ step "步骤 2/7：安装 Node.js"
 export NVM_DIR="${HOME}/.nvm"
 [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
 
-if command -v node &>/dev/null; then
+# CentOS 7: ALWAYS use nvm regardless of existing node
+if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+  if command -v nvm &>/dev/null && nvm which 18 &>/dev/null 2>&1; then
+    nvm use 18 --silent
+    success "Node.js $(node --version) 已通过 nvm 安装，跳过"
+  else
+    _install_node
+    [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+    success "Node.js $(node --version) 安装完成（nvm）"
+  fi
+elif command -v node &>/dev/null; then
   CURRENT_NODE=$(node --version | cut -d. -f1 | tr -d 'v')
   MIN_NODE=18
   if [[ "$CURRENT_NODE" -ge "$MIN_NODE" ]] 2>/dev/null; then
@@ -171,7 +185,6 @@ if command -v node &>/dev/null; then
   fi
 else
   _install_node
-  # Reload nvm after install
   [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
   success "Node.js $(node --version) 安装完成"
 fi
