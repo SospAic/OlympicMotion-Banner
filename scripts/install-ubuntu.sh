@@ -7,11 +7,15 @@ DIR="${HOME}/OlympicMotion-Banner"
 
 R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'
 C='\033[0;36m'; B='\033[1m'; N='\033[0m'
-ok()   { echo -e "${G}[✓]${N} $*"; }
-info() { echo -e "${C}[i]${N} $*"; }
-warn() { echo -e "${Y}[!]${N} $*"; }
-die()  { echo -e "${R}[✗]${N} $*"; exit 1; }
-step() { echo -e "\n${B}${C}── $* ──${N}"; }
+ok()       { echo -e "${G}[✓]${N} $*"; }
+info()     { echo -e "${C}[i]${N} $*"; }
+warn()     { echo -e "${Y}[!]${N} $*"; }
+die()      { echo -e "${R}[✗]${N} $*"; exit 1; }
+step()     { echo -e "\n${B}${C}── $* ──${N}"; }
+
+# Non-fatal warnings collected and shown at end
+WARNINGS=()
+warn_skip() { WARNINGS+=("$*"); echo -e "${Y}[!]${N} $* (已跳过)"; }
 
 echo -e "${B}"
 echo "  ╔══════════════════════════════════════════╗"
@@ -57,14 +61,16 @@ step "3/6 安装 Caddy Web 服务器"
 if command -v caddy &>/dev/null; then
   ok "Caddy $(caddy version | head -1) 已安装"
 else
-  apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-    | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-    | tee /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -qq
-  apt-get install -y caddy
-  ok "Caddy $(caddy version | head -1) 安装完成"
+  {
+    apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+      | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+      | tee /etc/apt/sources.list.d/caddy-stable.list
+    apt-get update -qq
+    apt-get install -y caddy
+    ok "Caddy $(caddy version | head -1) 安装完成"
+  } || warn_skip "Caddy 安装失败，域名 HTTPS 功能不可用（可后续手动安装）"
 fi
 
 # ── Step 4: PM2 + project ─────────────────────────────────────
@@ -74,13 +80,17 @@ ok "PM2 $(pm2 --version) 安装完成"
 
 if [[ -d "$DIR/.git" ]]; then
   info "项目已存在，更新代码..."
-  cd "$DIR" && git pull --rebase origin main
+  cd "$DIR"
+  git fetch origin main 2>&1 || warn_skip "git fetch 失败，使用现有代码"
+  git reset --hard origin/main 2>&1 || warn_skip "git reset 失败，使用现有代码"
+  git clean -fd 2>/dev/null || true
 else
-  git clone "$REPO" "$DIR"
+  git clone "$REPO" "$DIR" || die "克隆失败，请检查网络"
 fi
 cd "$DIR"
-npm ci --silent
-node node_modules/playwright/cli.js install chromium
+npm ci --silent || warn_skip "npm ci 失败，尝试 npm install"
+npm install --silent 2>/dev/null || warn_skip "npm install 失败，请手动运行 npm ci"
+node node_modules/playwright/cli.js install chromium 2>/dev/null || warn_skip "Playwright Chromium 安装失败，请手动运行: node node_modules/playwright/cli.js install chromium"
 ok "项目依赖安装完成"
 
 # ── Step 5: .env ──────────────────────────────────────────────
@@ -103,8 +113,9 @@ CRON="0 */2 * * * cd ${DIR} && node run.mjs >> ${LOG} 2>&1"
 if crontab -l 2>/dev/null | grep -q "OlympicMotion"; then
   ok "Cron 已存在"
 else
-  (crontab -l 2>/dev/null || true; echo "# OlympicMotion Banner Engine"; echo "$CRON") | crontab -
-  ok "Cron 已设置（每2小时备用轮询）"
+  { (crontab -l 2>/dev/null || true; echo "# OlympicMotion Banner Engine"; echo "$CRON") | crontab -
+    ok "Cron 已设置（每2小时备用轮询）"
+  } || warn_skip "Cron 设置失败，请手动添加定时任务"
 fi
 
 # ── Done ──────────────────────────────────────────────────────
@@ -113,5 +124,15 @@ echo "  ╔═══════════════════════
 echo "  ║  ✅ 安装完成！                             ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo -e "${N}"
+
+# Show any non-fatal warnings
+if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+  echo -e "${Y}  ⚠  安装过程中有以下问题需要注意：${N}"
+  for w in "${WARNINGS[@]}"; do
+    echo -e "  ${Y}•${N} ${w}"
+  done
+  echo ""
+fi
+
 echo -e "  接下来运行管理菜单："
 echo -e "  ${C}cd ${DIR} && node scripts/manage.mjs${N}\n"
