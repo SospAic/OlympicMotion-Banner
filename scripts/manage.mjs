@@ -191,28 +191,39 @@ async function mainMenu() {
 // ── 1. Install menu ───────────────────────────────────────────────────────
 async function menuInstall() {
   header("安装 & 初始化");
-  console.log(`  ${cyan("1")}  安装/更新 npm 依赖`);
-  console.log(`  ${cyan("2")}  安装 Playwright Chromium`);
-  console.log(`  ${cyan("3")}  安装 Playwright 系统依赖`);
-  console.log(`  ${cyan("4")}  安装 PM2 进程管理器`);
-  console.log(`  ${cyan("5")}  更新项目代码 (git pull)`);
+  console.log(`  ${cyan("1")}  Ubuntu 一键安装（推荐，全自动）`);
+  console.log(`  ${cyan("2")}  配置域名 + HTTPS + OAuth 回调 (Caddy)`);
+  console.log(`  ${cyan("3")}  仅安装/更新 npm 依赖`);
+  console.log(`  ${cyan("4")}  安装 Playwright Chromium`);
+  console.log(`  ${cyan("5")}  安装 Playwright 系统依赖`);
+  console.log(`  ${cyan("6")}  安装 PM2 进程管理器`);
+  console.log(`  ${cyan("7")}  更新项目代码 (git pull)`);
   console.log(`  ${cyan("0")}  返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
   switch (c) {
-    case "1":
-      console.log(); await run("npm", ["ci"]);
+    case "1": {
+      const sh = resolve(ROOT, "scripts/install-ubuntu.sh");
+      console.log();
+      await run("bash", [sh]);
       break;
+    }
     case "2":
-      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install", "chromium"]);
+      console.log(); await runScript("scripts/setup-caddy.mjs");
       break;
     case "3":
-      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install-deps", "chromium"]);
+      console.log(); await run("npm", ["ci"]);
       break;
     case "4":
-      console.log(); await run("npm", ["install", "-g", "pm2"]);
+      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install", "chromium"]);
       break;
     case "5":
+      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install-deps", "chromium"]);
+      break;
+    case "6":
+      console.log(); await run("npm", ["install", "-g", "pm2"]);
+      break;
+    case "7":
       console.log(); await run("git", ["pull", "--rebase", "origin", "main"]);
       break;
     case "0": break;

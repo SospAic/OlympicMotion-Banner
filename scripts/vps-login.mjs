@@ -31,7 +31,10 @@ const ROOT         = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_DIR  = resolve(ROOT, ".session");
 const SESSION_FILE = resolve(SESSION_DIR, "youtube-session.json");
 const CALLBACK_PORT = 8080;
-const REDIRECT_URI  = `http://localhost:${CALLBACK_PORT}/callback`;
+const REDIRECT_URI  = process.env.DOMAIN
+  ? `https://${process.env.DOMAIN}/oauth/callback`
+  : `http://localhost:${CALLBACK_PORT}/callback`;
+const USE_DOMAIN    = !!process.env.DOMAIN;
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube",
   "https://www.googleapis.com/auth/youtube.upload",
@@ -90,13 +93,21 @@ console.log("\n═════════════════════�
 console.log("  OlympicMotion — VPS 登录工具");
 console.log("═══════════════════════════════════════════════════════");
 console.log("\n📋 操作步骤：\n");
-console.log("【第一步】在你的本地电脑，开一个新终端，执行：\n");
-console.log(`  ssh -L ${CALLBACK_PORT}:localhost:${CALLBACK_PORT} -N root@${vpsIp}\n`);
-console.log("  ✓ 输入密码后没有任何输出是正常的，保持这个终端不关闭\n");
-console.log("【第二步】本地浏览器（使用你运营 YouTube 的 VPN）打开以下链接：\n");
-console.log(`  ${authUrl.toString()}\n`);
-console.log("  ✓ 选择你的 YouTube 运营账号登录并授权\n");
-console.log("【第三步】等待自动完成...\n");
+
+if (USE_DOMAIN) {
+  console.log("【已配置域名模式 — 无需 SSH 隧道】\n");
+  console.log("直接用运营 YouTube 的浏览器打开以下链接：\n");
+  console.log(`  ${authUrl.toString()}\n`);
+  console.log("  ✓ 授权后页面自动跳转，VPS 自动完成后续步骤\n");
+} else {
+  console.log("【第一步】在你的本地电脑，开一个新终端，执行：\n");
+  console.log(`  ssh -L ${CALLBACK_PORT}:localhost:${CALLBACK_PORT} -N root@${vpsIp}\n`);
+  console.log("  ✓ 输入密码后没有任何输出是正常的，保持这个终端不关闭\n");
+  console.log("【第二步】本地浏览器（使用你运营 YouTube 的 VPN）打开以下链接：\n");
+  console.log(`  ${authUrl.toString()}\n`);
+  console.log("  ✓ 选择你的 YouTube 运营账号登录并授权\n");
+  console.log("【第三步】等待自动完成...\n");
+}
 console.log("═══════════════════════════════════════════════════════\n");
 
 // ── Start callback HTTP server ────────────────────────────────────────────
