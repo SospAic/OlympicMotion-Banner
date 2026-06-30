@@ -106,6 +106,7 @@ _install_node() {
     # Make node/npm available system-wide via symlinks
     NODE_BIN=$(nvm which current)
     NODE_DIR=$(dirname "$NODE_BIN")
+    rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx
     ln -sf "$NODE_BIN"           /usr/local/bin/node
     ln -sf "${NODE_DIR}/npm"     /usr/local/bin/npm
     ln -sf "${NODE_DIR}/npx"     /usr/local/bin/npx
@@ -265,6 +266,7 @@ if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
   NVM_NODE=$(ls "${NVM_DIR}/versions/node/" 2>/dev/null | sort -V | tail -1)
   if [[ -n "$NVM_NODE" ]]; then
     export PATH="${NVM_DIR}/versions/node/${NVM_NODE}/bin:${PATH}"
+    rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx
     ln -sf "${NVM_DIR}/versions/node/${NVM_NODE}/bin/node" /usr/local/bin/node
     ln -sf "${NVM_DIR}/versions/node/${NVM_NODE}/bin/npm"  /usr/local/bin/npm
     ln -sf "${NVM_DIR}/versions/node/${NVM_NODE}/bin/npx"  /usr/local/bin/npx
