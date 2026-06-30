@@ -28,9 +28,62 @@ step()    { echo -e "\n${BOLD}${BLUE}══ $* ══${NC}"; }
 echo -e "${BOLD}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║   OlympicMotion Banner Engine              ║"
-echo "  ║   VPS 一键安装脚本 v1.0                    ║"
+echo "  ║   VPS 一键安装脚本 v1.1                    ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
+
+# ── Detect OS ─────────────────────────────────────────────────
+OS_ID=""
+OS_VERSION=""
+PKG_MANAGER=""
+
+if [[ -f /etc/os-release ]]; then
+  source /etc/os-release
+  OS_ID="${ID,,}"        # lowercase: ubuntu, debian, centos, rhel, fedora, rocky, almalinux
+  OS_VERSION="${VERSION_ID%%.*}"  # major version only
+elif [[ -f /etc/redhat-release ]]; then
+  OS_ID="centos"
+  OS_VERSION=$(grep -oE '[0-9]+' /etc/redhat-release | head -1)
+fi
+
+case "$OS_ID" in
+  ubuntu|debian|linuxmint)
+    PKG_MANAGER="apt"
+    ;;
+  centos|rhel|fedora|rocky|almalinux|ol)
+    PKG_MANAGER="yum"
+    # CentOS 8+ / RHEL 8+ use dnf
+    if [[ "$OS_VERSION" -ge 8 ]] 2>/dev/null; then
+      PKG_MANAGER="dnf"
+    fi
+    ;;
+  *)
+    warn "未识别的系统：${OS_ID}，尝试自动检测包管理器"
+    if command -v dnf  &>/dev/null; then PKG_MANAGER="dnf"
+    elif command -v yum  &>/dev/null; then PKG_MANAGER="yum"
+    elif command -v apt-get &>/dev/null; then PKG_MANAGER="apt"
+    else error "无法确定包管理器，请手动安装依赖"
+    fi
+    ;;
+esac
+
+info "检测到系统：${OS_ID:-unknown} ${OS_VERSION} | 包管理器：${PKG_MANAGER}"
+
+# ── Node.js install helper ────────────────────────────────────
+_install_node() {
+  info "安装 Node.js ${NODE_VERSION}..."
+  case "$PKG_MANAGER" in
+    apt)
+      curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
+      apt-get install -y nodejs
+      ;;
+    dnf|yum)
+      # NodeSource rpm repo
+      curl -fsSL "https://rpm.nodesource.com/setup_${NODE_VERSION}.x" | bash -
+      $PKG_MANAGER install -y nodejs
+      ;;
+  esac
+}
 
 # ── Check root ────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
@@ -38,40 +91,78 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # ── Step 1: System update ─────────────────────────────────────
-step "步骤 1/6：更新系统包"
-apt-get update -qq
+step "步骤 1/7：更新系统包"
+case "$PKG_MANAGER" in
+  apt)
+    apt-get update -qq
+    ;;
+  dnf)
+    dnf check-update -q || true
+    # Install EPEL for extra packages (CentOS/RHEL)
+    dnf install -y -q epel-release 2>/dev/null || true
+    ;;
+  yum)
+    yum check-update -q || true
+    yum install -y -q epel-release 2>/dev/null || true
+    ;;
+esac
 success "系统包索引已更新"
 
 # ── Step 2: Install Node.js ───────────────────────────────────
-step "步骤 2/6：安装 Node.js ${NODE_VERSION}"
+step "步骤 2/7：安装 Node.js ${NODE_VERSION}"
 if command -v node &>/dev/null; then
   CURRENT_NODE=$(node --version | cut -d. -f1 | tr -d 'v')
-  if [[ $CURRENT_NODE -ge $NODE_VERSION ]]; then
+  if [[ "$CURRENT_NODE" -ge "$NODE_VERSION" ]] 2>/dev/null; then
     success "Node.js $(node --version) 已安装，跳过"
   else
     warn "Node.js 版本过低 ($(node --version))，重新安装..."
-    curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-    apt-get install -y nodejs
+    _install_node
     success "Node.js $(node --version) 安装完成"
   fi
 else
-  info "安装 Node.js ${NODE_VERSION}..."
-  curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-  apt-get install -y nodejs
+  _install_node
   success "Node.js $(node --version) 安装完成"
 fi
 
 # ── Step 3: Install system deps for Playwright ───────────────
-step "步骤 3/6：安装 Playwright 系统依赖"
-apt-get install -y --no-install-recommends \
-  git curl ca-certificates \
-  libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
-  libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
-  libxdamage1 libxfixes3 libxrandr2 libgbm1 \
-  libpango-1.0-0 libcairo2 libasound2 \
-  libx11-xcb1 libxcb1 libxext6 libx11-6 \
-  fonts-liberation fonts-noto-cjk \
-  2>/dev/null || true
+step "步骤 3/7：安装 Playwright 系统依赖"
+case "$PKG_MANAGER" in
+  apt)
+    apt-get install -y --no-install-recommends \
+      git curl ca-certificates \
+      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+      libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+      libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+      libpango-1.0-0 libcairo2 libasound2 \
+      libx11-xcb1 libxcb1 libxext6 libx11-6 \
+      fonts-liberation fonts-noto-cjk \
+      2>/dev/null || true
+    ;;
+  dnf|yum)
+    # CentOS / RHEL / Rocky equivalents
+    $PKG_MANAGER install -y \
+      git curl ca-certificates \
+      nss nspr atk at-spi2-atk \
+      cups-libs libdrm libxkbcommon libXcomposite \
+      libXdamage libXfixes libXrandr mesa-libgbm \
+      pango cairo alsa-lib \
+      libX11-xcb libxcb libXext libX11 \
+      liberation-fonts \
+      2>/dev/null || true
+
+    # Enable additional font support on CentOS 7
+    if [[ "$OS_VERSION" == "7" ]]; then
+      yum install -y fontconfig freetype 2>/dev/null || true
+    fi
+
+    # CentOS 7 needs additional libraries for headless Chrome
+    if [[ "$OS_ID" == "centos" && "$OS_VERSION" == "7" ]]; then
+      yum install -y \
+        libXScrnSaver GConf2 \
+        2>/dev/null || true
+    fi
+    ;;
+esac
 success "系统依赖安装完成"
 
 # ── Step 4: Clone / update project ───────────────────────────
@@ -122,7 +213,7 @@ chmod 700 "${INSTALL_DIR}/.session" 2>/dev/null || mkdir -p "${INSTALL_DIR}/.ses
 touch "$LOG_FILE" 2>/dev/null || LOG_FILE="${INSTALL_DIR}/banner.log"
 success "日志文件：${LOG_FILE}"
 
-# ── Setup cron ────────────────────────────────────────────────
+# ── Setup cron (backup polling, daemon is primary) ────────────
 CRON_JOB="0 */2 * * * cd ${INSTALL_DIR} && node run.mjs >> ${LOG_FILE} 2>&1"
 # Check if cron already set
 if crontab -l 2>/dev/null | grep -q "OlympicMotion-Banner"; then
