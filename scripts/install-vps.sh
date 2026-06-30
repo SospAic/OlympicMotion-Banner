@@ -284,8 +284,8 @@ npm ci --silent
 
 # CentOS 7: use Playwright's built-in deps installer
 if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
-  info "CentOS 7：使用 Playwright 自带依赖安装方式..."
-  node node_modules/playwright/cli.js install chromium --with-deps 2>/dev/null || \
+  info "CentOS 7：让 Playwright 自动安装所需系统依赖..."
+  node node_modules/playwright/cli.js install-deps chromium 2>/dev/null || true
   node node_modules/playwright/cli.js install chromium
 else
   node node_modules/playwright/cli.js install chromium

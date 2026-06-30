@@ -1,34 +1,39 @@
 /**
  * interactive-login.mjs — 交互式登录 + Session 保存
  *
- * 在 VPS 上通过端口转发，用本地浏览器完成 Google 登录，
- * Playwright 捕获完整 session（含所有 HttpOnly Cookie）保存到本地。
+ * 支持两种模式，自动选择：
  *
- * 步骤：
- *   VPS 上运行此脚本 → 本地浏览器打开提示的 URL → 完成登录 → session 自动保存
+ * 模式 A — SSH 端口转发（无 GUI VPS 推荐）
+ *   1. VPS 上运行此脚本
+ *   2. 脚本输出 SSH 转发命令，在本地电脑执行
+ *   3. 本地 Chrome 打开 http://localhost:9222 完成登录
+ *   4. 回到 VPS 脚本，按回车确认，session 自动保存
+ *
+ * 模式 B — 有图形界面
+ *   直接打开浏览器窗口完成登录
  *
  * 用法：
- *   # 在 VPS 上运行（需要先做 SSH 端口转发）
- *   node scripts/interactive-login.mjs
- *
- * SSH 端口转发命令（在本地电脑执行）：
- *   ssh -L 9222:localhost:9222 root@你的VPS_IP
+ *   node scripts/interactive-login.mjs          # 自动检测
+ *   node scripts/interactive-login.mjs --gui    # 强制图形界面模式
  */
 
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { resolve }                               from "node:path";
-import { fileURLToPath }                         from "node:url";
-import { chromium }                              from "playwright";
-import { createServer }                          from "node:http";
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { resolve, dirname }   from "node:path";
+import { fileURLToPath }      from "node:url";
+import { createInterface }    from "node:readline";
+import { chromium }           from "playwright";
+import { createServer }       from "node:http";
 
 const ROOT         = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_DIR  = resolve(ROOT, ".session");
 const SESSION_FILE = resolve(SESSION_DIR, "youtube-session.json");
-const CALLBACK_PORT = 9876;
+const DEBUG_PORT   = 9222;
+const FORCE_GUI    = process.argv.includes("--gui");
+const HAS_DISPLAY  = !!process.env.DISPLAY;
+const USE_HEADLESS = !FORCE_GUI && !HAS_DISPLAY;
 
-// Load .env
+// ── Load .env ─────────────────────────────────────────────────────────────
 try {
-  const { readFileSync } = await import("node:fs");
   const envPath = resolve(ROOT, ".env");
   if (existsSync(envPath)) {
     for (const line of readFileSync(envPath, "utf8").split("\n")) {
@@ -46,26 +51,66 @@ try {
 mkdirSync(SESSION_DIR, { recursive: true });
 mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 
+// ── readline helper ───────────────────────────────────────────────────────
+function ask(question) {
+  return new Promise(resolve => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, answer => { rl.close(); resolve(answer.trim()); });
+  });
+}
+
+// ── Get VPS IP ────────────────────────────────────────────────────────────
+async function getVpsIp() {
+  try {
+    const r = await fetch("https://api.ipify.org?format=text");
+    return (await r.text()).trim();
+  } catch {
+    return "你的VPS_IP";
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════════════════════
 console.log("\n═══════════════════════════════════════════════");
 console.log("  OlympicMotion Banner Engine");
-console.log("  交互式登录 — Session 生成工具");
+console.log("  YouTube Studio 登录 — Session 生成工具");
+console.log(`  模式：${USE_HEADLESS ? "SSH 端口转发（无头）" : "图形界面"}`);
 console.log("═══════════════════════════════════════════════\n");
 
-// ── Launch browser with remote debugging port ─────────────────────────────
-console.log("🚀 启动 Playwright 浏览器（带调试端口）...");
+// ── Launch browser ────────────────────────────────────────────────────────
+console.log("🚀 启动 Playwright 浏览器...");
 
-const browser = await chromium.launch({
-  headless: false,       // 需要可视化（通过 SSH X11 或端口转发）
+const launchOptions = {
+  headless: USE_HEADLESS,
   args: [
-    "--remote-debugging-port=9222",
+    `--remote-debugging-port=${DEBUG_PORT}`,
     "--no-sandbox",
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
+    "--disable-gpu",
     "--window-size=1280,900",
   ],
-  // If no display available, try virtual display
-  ...(process.env.DISPLAY ? {} : { headless: true }),
-});
+};
+
+// In headless mode, we don't need a display
+if (USE_HEADLESS) {
+  launchOptions.headless = true;
+}
+
+let browser;
+try {
+  browser = await chromium.launch(launchOptions);
+} catch (e) {
+  console.error("\n❌ Playwright 启动失败：", e.message);
+  console.error("\n请手动安装缺失的系统依赖：");
+  console.error("  yum install -y nss nspr atk at-spi2-atk cups-libs libdrm");
+  console.error("  libxkbcommon libXcomposite libXdamage libXfixes libXrandr");
+  console.error("  mesa-libgbm pango cairo alsa-lib libX11 libxcb libXext\n");
+  console.error("或者运行：");
+  console.error("  node node_modules/playwright/cli.js install-deps chromium\n");
+  process.exit(1);
+}
 
 const context = await browser.newContext({
   viewport:  { width: 1280, height: 900 },
@@ -74,82 +119,85 @@ const context = await browser.newContext({
 
 const page = await context.newPage();
 
-// ── Navigate to YouTube Studio login ─────────────────────────────────────
-const TARGET = "https://studio.youtube.com/";
-await page.goto(TARGET, { waitUntil: "domcontentloaded", timeout: 30_000 });
+// ── SSH Port Forward mode (headless) ──────────────────────────────────────
+if (USE_HEADLESS) {
+  const vpsIp = await getVpsIp();
 
-const startUrl = page.url();
-const needsLogin = startUrl.includes("accounts.google.com");
+  console.log("📋 无头模式 — SSH 端口转发登录");
+  console.log("══════════════════════════════════════════════════════");
+  console.log("\n第一步：在你的本地电脑开一个新终端，执行以下命令：\n");
+  console.log(`  ssh -L ${DEBUG_PORT}:localhost:${DEBUG_PORT} -N root@${vpsIp}`);
+  console.log("\n（保持这个终端不要关闭）\n");
+  console.log("第二步：本地 Chrome/Edge 浏览器访问：\n");
+  console.log(`  chrome://inspect`);
+  console.log("\n  点击 'Configure' → 添加 localhost:9222");
+  console.log("  然后点击 'inspect' 进入远程调试界面\n");
+  console.log("  或者直接访问：http://localhost:9222\n");
+  console.log("══════════════════════════════════════════════════════\n");
 
-if (needsLogin) {
-  console.log("\n📋 需要登录 Google 账号");
-  console.log("═══════════════════════════════════════════════");
+  // Navigate to YouTube Studio login
+  await page.goto("https://accounts.google.com/", {
+    waitUntil: "domcontentloaded",
+    timeout: 15_000,
+  }).catch(() => {});
 
-  if (process.env.DISPLAY) {
-    // Has display — show browser window
-    console.log("✓ 检测到图形界面，浏览器窗口已打开");
-    console.log("  请在浏览器窗口中完成 Google 登录");
-  } else {
-    // Headless mode — generate login URL and wait
-    console.log("⚠  无图形界面，使用 URL 登录方式");
-    console.log("\n方式一：SSH 端口转发（推荐）");
-    console.log("─────────────────────────────");
-    console.log("在本地电脑开一个新终端，执行：");
-    console.log(`\n  ssh -L 9222:localhost:9222 root@$(hostname -I | awk '{print $1}')\n`);
-    console.log("然后本地 Chrome 访问：chrome://inspect");
-    console.log("点击 'inspect' 进入远程调试界面，完成登录\n");
+  await page.goto("https://studio.youtube.com/", {
+    waitUntil: "domcontentloaded",
+    timeout: 15_000,
+  }).catch(() => {});
 
-    console.log("方式二：直接打开登录链接");
-    console.log("─────────────────────────");
-    console.log("在已登录 Google 的设备上访问以下链接完成授权后");
-    console.log("脚本将自动检测并保存 session\n");
+  console.log("⏳ 等待你在本地浏览器完成 Google 登录...\n");
+  console.log("   登录完成后，回到这里按回车键继续...\n");
+
+  // Wait for user to complete login in the remote debug window
+  await ask("   [完成登录后按 Enter 键继续]");
+
+  // Check login status
+  const currentUrl = page.url();
+  console.log("\n  验证登录状态...");
+  console.log(`  当前 URL：${currentUrl.substring(0, 60)}`);
+
+  // Try navigating to studio if not already there
+  if (!currentUrl.includes("studio.youtube.com")) {
+    await page.goto("https://studio.youtube.com/", {
+      waitUntil: "networkidle",
+      timeout: 20_000,
+    }).catch(() => {});
   }
 
-  // Wait for successful navigation to YouTube Studio
-  console.log("⏳ 等待登录完成（最多 5 分钟）...");
-  console.log("   登录成功后脚本自动继续\n");
+} else {
+  // ── GUI mode ──────────────────────────────────────────────────────────
+  await page.goto("https://studio.youtube.com/", {
+    waitUntil: "domcontentloaded",
+    timeout: 20_000,
+  }).catch(() => {});
 
-  await page.waitForURL(
-    url => url.includes("studio.youtube.com") && !url.includes("accounts.google.com"),
-    { timeout: 5 * 60 * 1000 }
-  ).catch(() => {
-    console.error("❌ 登录超时（5分钟内未完成）");
-  });
+  const needsLogin = page.url().includes("accounts.google.com");
+  if (needsLogin) {
+    console.log("✓ 浏览器窗口已打开，请完成 Google 登录...");
+    await page.waitForURL(
+      url => url.includes("studio.youtube.com") && !url.includes("accounts.google.com"),
+      { timeout: 5 * 60 * 1000 }
+    );
+  }
 }
 
-// ── Verify login ──────────────────────────────────────────────────────────
-const finalUrl = page.url();
-console.log("\n当前 URL：", finalUrl.substring(0, 80));
+// ── Collect cookies from all relevant domains ─────────────────────────────
+console.log("\n  正在收集 session cookies...");
 
-if (!finalUrl.includes("studio.youtube.com") || finalUrl.includes("accounts.google.com")) {
-  await page.screenshot({ path: resolve(ROOT, "dist/login-debug.png") });
-  console.error("❌ 登录未成功，调试截图：dist/login-debug.png");
-  await browser.close();
-  process.exit(1);
-}
-
-// Wait a bit to ensure all cookies are set
-await page.waitForTimeout(3000);
-
-// ── Also navigate to key YouTube domains to capture all cookies ───────────
+// Visit key domains to capture all auth cookies
 for (const domain of [
   "https://www.youtube.com/",
   "https://accounts.google.com/",
+  "https://studio.youtube.com/",
 ]) {
   try {
     await page.goto(domain, { waitUntil: "domcontentloaded", timeout: 10_000 });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(800);
   } catch { /* ignore */ }
 }
 
-// Navigate back to studio
-await page.goto("https://studio.youtube.com/", {
-  waitUntil: "networkidle",
-  timeout:   20_000,
-}).catch(() => {});
-await page.waitForTimeout(2000);
-
-// ── Save session ──────────────────────────────────────────────────────────
+const finalUrl = page.url();
 const allCookies = await context.cookies([
   "https://google.com",
   "https://accounts.google.com",
@@ -158,62 +206,71 @@ const allCookies = await context.cookies([
   "https://studio.youtube.com",
 ]);
 
-// Get email from page title or account info
+const authCookies = allCookies.filter(c =>
+  ["SID", "HSID", "SSID", "SAPISID", "__Secure-1PSID", "__Secure-3PSID"].includes(c.name)
+);
+
+// Save debug screenshot
+await page.screenshot({ path: resolve(ROOT, "dist/login-result.png") });
+
+if (authCookies.length < 2) {
+  await browser.close();
+  console.error("\n❌ 认证 Cookie 数量不足（找到 " + authCookies.length + " 个，需要至少 2 个）");
+  console.error("   说明登录未成功完成");
+  console.error("   调试截图：dist/login-result.png");
+  if (USE_HEADLESS) {
+    console.error("\n   请确认：");
+    console.error("   1. SSH 转发命令已在本地执行并保持连接");
+    console.error("   2. 已在本地浏览器完成 Google 账号登录");
+    console.error("   3. 登录后等待页面跳转到 studio.youtube.com 再按 Enter");
+  }
+  process.exit(1);
+}
+
+// ── Save session ──────────────────────────────────────────────────────────
 let email = "unknown";
 try {
-  email = await page.evaluate(() => {
-    const meta = document.querySelector('meta[name="yt-remote-connected-devices"]');
-    return window.__ytInitialData?.header?.c4TabbedHeaderRenderer?.title ?? "unknown";
-  });
+  email = await page.evaluate(() =>
+    document.querySelector('meta[property="og:title"]')?.content ??
+    document.title ?? "unknown"
+  );
 } catch { /* ignore */ }
 
 const sessionData = {
-  createdAt: new Date().toISOString(),
+  createdAt:   new Date().toISOString(),
   email,
-  loginMethod: "interactive",
-  cookies: allCookies,
+  loginMethod: USE_HEADLESS ? "ssh-tunnel" : "gui",
+  cookies:     allCookies,
 };
 
 writeFileSync(SESSION_FILE, JSON.stringify(sessionData, null, 2));
-
 await browser.close();
 
 console.log("\n═══════════════════════════════════════════════");
 console.log("✅ Session 保存成功！");
 console.log(`   文件：${SESSION_FILE}`);
-console.log(`   Cookie 数量：${allCookies.length}`);
-
-const authCookies = allCookies.filter(c =>
-  ["SID", "HSID", "SSID", "SAPISID", "__Secure-1PSID", "__Secure-3PSID"].includes(c.name)
-);
+console.log(`   Cookie 总数：${allCookies.length}`);
 console.log(`   认证 Cookie：${authCookies.length} 个`);
+console.log(`   截图：dist/login-result.png`);
 
-if (authCookies.length < 3) {
-  console.warn("\n⚠  认证 Cookie 数量较少，session 可能不完整");
-  console.warn("   建议重新登录：node scripts/interactive-login.mjs");
-} else {
-  console.log("\n✓ Session 有效，可以运行：node run.mjs");
-}
-
-// Auto-encrypt if SESSION_ENCRYPTION_KEY is set
+// Auto-encrypt if key is set
 if (process.env.SESSION_ENCRYPTION_KEY) {
   try {
     const { encryptSession } = await import("./encrypt-session.mjs");
-    const enc = encryptSession(JSON.stringify(sessionData, null, 2));
+    const enc     = encryptSession(JSON.stringify(sessionData, null, 2));
     const encFile = resolve(SESSION_DIR, "youtube-session.enc");
     writeFileSync(encFile, enc);
-    // Remove plain text file after encryption
     const { unlinkSync } = await import("node:fs");
     unlinkSync(SESSION_FILE);
-    console.log(`\n🔒 Session 已加密保存：${encFile}`);
+    console.log(`\n🔒 Session 已加密：${encFile}`);
     console.log("   明文文件已自动删除");
   } catch (e) {
     console.warn("⚠  自动加密失败：", e.message);
-    console.warn("   可手动加密：node scripts/encrypt-session.mjs --encrypt");
   }
 } else {
-  console.log("\n💡 提示：设置 SESSION_ENCRYPTION_KEY 可自动加密 session 文件");
-  console.log("   生成密钥：node scripts/encrypt-session.mjs --gen-key");
+  console.log("\n💡 提示：设置 SESSION_ENCRYPTION_KEY 可自动加密 session");
+  console.log("   node scripts/encrypt-session.mjs --gen-key");
 }
 
+console.log("\n✓ 现在可以运行：node run.mjs");
 console.log("═══════════════════════════════════════════════\n");
