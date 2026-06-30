@@ -102,8 +102,7 @@ console.log("══════════════════════�
 // ── Start callback HTTP server ────────────────────────────────────────────
 console.log(`⏳ 正在监听授权回调（端口 ${CALLBACK_PORT}）...\n`);
 
-const authCode = await new Promise((resolve, reject) => {
-  const server = createServer((req, res) => {
+const authCode = await new Promise((resolve, reject) => {  const server = createServer((req, res) => {
     const url   = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
     const code  = url.searchParams.get("code");
     const error = url.searchParams.get("error");
@@ -146,7 +145,7 @@ const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
   method:  "POST",
   headers: { "content-type": "application/x-www-form-urlencoded" },
   body:    new URLSearchParams({
-    code,
+    code:          authCode,
     client_id:     CLIENT_ID,
     client_secret: CLIENT_SECRET,
     redirect_uri:  REDIRECT_URI,
