@@ -70,31 +70,43 @@ try {
 
 const env = loadEnv();
 
-// Get domain
-let domain = env.DOMAIN ?? "";
-if (!domain) {
-  while (true) {
-    domain = (await ask("请输入你的域名（如 banner.example.com，不含 http://）：")).trim()
-      .replace(/^https?:\/\//i, "")   // strip protocol
-      .replace(/\/.*$/, "")            // strip path
-      .replace(/\r/g, "");             // strip \r
-    if (!domain) { console.error("❌ 域名不能为空，请重新输入"); continue; }
-    if (!/^[a-z0-9]([a-z0-9\-\.]+)?[a-z0-9]$/i.test(domain)) {
-      console.error(`❌ 域名格式不正确：${domain}，请重新输入`); continue;
-    }
-    break;
+// Wrap everything in a loop so user can re-enter domain if wrong
+while (true) {
+  let domain = env.DOMAIN ?? "";
+
+  // Always ask — show current value and allow correction
+  if (domain) {
+    console.log(`\n  当前 .env 中的域名：${domain}`);
+    const reuse = (await ask(`  使用此域名？(y/N，输入 n 重新填写)：`));
+    if (!reuse.startsWith("y")) domain = "";
   }
-  saveEnv("DOMAIN", domain);
-}
-console.log(`\n✓ 域名：${domain}`);
 
-// Get banner port
-const bannerPort = env.PORT ?? "4173";
-const webhookPort = env.WEBHOOK_PORT ?? "4174";
-const oauthPort = "8080";
+  if (!domain) {
+    while (true) {
+      domain = (await ask("请输入你的域名（如 banner.example.com，不含 http://）："))
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/.*$/, "")
+        .replace(/\r/g, "")
+        .trim();
+      if (!domain) { console.error("❌ 域名不能为空，请重新输入"); continue; }
+      if (!/^[a-z0-9]([a-z0-9\-\.]+)?[a-z0-9]$/i.test(domain)) {
+        console.error(`❌ 域名格式不正确：${domain}，请重新输入`); continue;
+      }
+      break;
+    }
+    saveEnv("DOMAIN", domain);
+    env.DOMAIN = domain;
+  }
 
-// Build Caddyfile
-const caddyfile = `# OlympicMotion Banner Engine — Caddy 配置
+  console.log(`\n✓ 域名：${domain}`);
+
+  // Get banner port
+  const bannerPort  = env.PORT ?? "4173";
+  const webhookPort = env.WEBHOOK_PORT ?? "4174";
+  const oauthPort   = "8080";
+
+  // Build Caddyfile
+  const caddyfile = `# OlympicMotion Banner Engine — Caddy 配置
 # 自动 HTTPS，证书由 Let's Encrypt 签发
 
 ${domain} {
@@ -121,57 +133,70 @@ ${domain} {
 }
 `;
 
-console.log("\n生成的 Caddyfile 内容：");
-console.log("─────────────────────────────────────────────");
-console.log(caddyfile);
-console.log("─────────────────────────────────────────────");
+  console.log("\n生成的 Caddyfile 内容：");
+  console.log("─────────────────────────────────────────────");
+  console.log(caddyfile);
+  console.log("─────────────────────────────────────────────");
 
-const confirm = await ask("确认写入 /etc/caddy/Caddyfile？(y/N)：");
-if (!confirm.trim().toLowerCase().startsWith("y")) {
-  console.log("已取消");
-  rl.close();
-  process.exit(0);
+  const confirm = await ask("确认写入 /etc/caddy/Caddyfile？(y=确认 / n=重新输入域名 / q=退出)：");
+
+  if (confirm.startsWith("q")) {
+    console.log("已退出");
+    rl.close();
+    process.exit(0);
+  }
+
+  if (!confirm.startsWith("y")) {
+    // Clear saved domain so user can re-enter
+    saveEnv("DOMAIN", "");
+    env.DOMAIN = "";
+    console.log("\n重新输入域名...\n");
+    continue;
+  }
+
+  // ── User confirmed — write Caddyfile ───────────────────────────────────
+  // Backup existing Caddyfile
+  if (existsSync(CADDY_FILE)) {
+    const backup = `${CADDY_FILE}.bak.${Date.now()}`;
+    execSync(`cp ${CADDY_FILE} ${backup}`);
+    console.log(`✓ 原配置已备份：${backup}`);
+  }
+
+  writeFileSync(CADDY_FILE, caddyfile);
+  console.log("✓ Caddyfile 已写入");
+
+  // Create log dir
+  execSync("mkdir -p /var/log/caddy");
+
+  // Reload Caddy
+  console.log("\n重载 Caddy...");
+  await run("systemctl", ["reload", "caddy"]).catch(() =>
+    run("caddy", ["reload", "--config", CADDY_FILE])
+  );
+
+  // Update .env with public URL
+  const publicUrl = `https://${domain}`;
+  saveEnv("WEBHOOK_PUBLIC_URL", `${publicUrl}/webhook`);
+  saveEnv("BANNER_URL", publicUrl);
+  console.log(`\n✓ 已更新 .env：`);
+  console.log(`  WEBHOOK_PUBLIC_URL = ${publicUrl}/webhook`);
+  console.log(`  BANNER_URL         = ${publicUrl}`);
+
+  // Show Google Cloud Console instructions
+  console.log("\n══════════════════════════════════════════════");
+  console.log("  接下来需要在 Google Cloud Console 配置：");
+  console.log("══════════════════════════════════════════════\n");
+  console.log("1. 打开 https://console.cloud.google.com");
+  console.log("2. API 和服务 → 凭据 → 找到你的 OAuth 客户端 → 编辑");
+  console.log("3. 在「已授权的重定向 URI」中添加：\n");
+  console.log(`   \x1b[33m${publicUrl}/oauth/callback\x1b[0m\n`);
+  console.log("4. API 和服务 → OAuth 同意屏幕 → 发布应用（正式版）");
+  console.log("   （发布后 refresh_token 永不过期）\n");
+  console.log("5. 完成后重新运行登录：");
+  console.log("   node scripts/vps-login.mjs\n");
+  console.log("══════════════════════════════════════════════\n");
+
+  break; // done
 }
-
-// Backup existing Caddyfile
-if (existsSync(CADDY_FILE)) {
-  const backup = `${CADDY_FILE}.bak.${Date.now()}`;
-  execSync(`cp ${CADDY_FILE} ${backup}`);
-  console.log(`✓ 原配置已备份：${backup}`);
-}
-
-writeFileSync(CADDY_FILE, caddyfile);
-console.log("✓ Caddyfile 已写入");
-
-// Create log dir
-execSync("mkdir -p /var/log/caddy");
-
-// Reload Caddy
-console.log("\n重载 Caddy...");
-await run("systemctl", ["reload", "caddy"]).catch(() =>
-  run("caddy", ["reload", "--config", CADDY_FILE])
-);
-
-// Update .env with public URL
-const publicUrl = `https://${domain}`;
-saveEnv("WEBHOOK_PUBLIC_URL", `${publicUrl}/webhook`);
-saveEnv("BANNER_URL", publicUrl);
-console.log(`\n✓ 已更新 .env：`);
-console.log(`  WEBHOOK_PUBLIC_URL = ${publicUrl}/webhook`);
-console.log(`  BANNER_URL         = ${publicUrl}`);
-
-// Show Google Cloud Console instructions
-console.log("\n══════════════════════════════════════════════");
-console.log("  接下来需要在 Google Cloud Console 配置：");
-console.log("══════════════════════════════════════════════\n");
-console.log("1. 打开 https://console.cloud.google.com");
-console.log("2. API 和服务 → 凭据 → 找到你的 OAuth 客户端 → 编辑");
-console.log("3. 在「已授权的重定向 URI」中添加：\n");
-console.log(`   \x1b[33m${publicUrl}/oauth/callback\x1b[0m\n`);
-console.log("4. API 和服务 → OAuth 同意屏幕 → 发布应用（正式版）");
-console.log("   （发布后 refresh_token 永不过期）\n");
-console.log("5. 完成后重新运行登录：");
-console.log("   node scripts/vps-login.mjs\n");
-console.log("══════════════════════════════════════════════\n");
 
 rl.close();
