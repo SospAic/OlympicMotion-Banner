@@ -23,7 +23,14 @@ const ENV_FILE   = resolve(ROOT, ".env");
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const rl  = createInterface({ input: process.stdin, output: process.stdout });
-const ask = q => new Promise(r => rl.question(q, a => r(a.trim().replace(/\r/g, ""))));
+// Create a fresh readline for each question to avoid input buffering issues
+const ask = q => new Promise(r => {
+  const iface = createInterface({ input: process.stdin, output: process.stdout });
+  iface.question(q, a => {
+    iface.close();
+    r(a.replace(/[\r\n]/g, "").trim());
+  });
+});
 
 function loadEnv() {
   if (!existsSync(ENV_FILE)) return {};
@@ -83,14 +90,16 @@ while (true) {
 
   if (!domain) {
     while (true) {
-      domain = (await ask("请输入你的域名（如 banner.example.com，不含 http://）："))
+      const raw = await ask("请输入你的域名（如 banner.example.com，不含 http://）：");
+      domain = raw
         .replace(/^https?:\/\//i, "")
         .replace(/\/.*$/, "")
-        .replace(/\r/g, "")
+        .replace(/[\r\n\t ]/g, "")
         .trim();
       if (!domain) { console.error("❌ 域名不能为空，请重新输入"); continue; }
-      if (!/^[a-z0-9]([a-z0-9\-\.]+)?[a-z0-9]$/i.test(domain)) {
-        console.error(`❌ 域名格式不正确：${domain}，请重新输入`); continue;
+      // Allow: letters, digits, hyphens, dots — at least one dot required
+      if (!/^[a-z0-9][a-z0-9\-]*(\.[a-z0-9\-]+)+$/i.test(domain)) {
+        console.error(`❌ 域名格式不正确（收到："${domain}"），请重新输入`); continue;
       }
       break;
     }
@@ -142,7 +151,6 @@ ${domain} {
 
   if (confirm.startsWith("q")) {
     console.log("已退出");
-    rl.close();
     process.exit(0);
   }
 
