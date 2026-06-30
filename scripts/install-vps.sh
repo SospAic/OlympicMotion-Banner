@@ -8,7 +8,7 @@
 #   chmod +x install.sh && bash install.sh
 # ═══════════════════════════════════════════════════════════════
 
-set -uo pipefail
+set -euo pipefail
 
 REPO_URL="https://github.com/SospAic/OlympicMotion-Banner.git"
 INSTALL_DIR="${HOME}/OlympicMotion-Banner"
@@ -37,57 +37,37 @@ OS_ID=""
 OS_VERSION=""
 PKG_MANAGER=""
 
-# Method 1: parse /etc/os-release manually (avoid source issues with set -e)
 if [[ -f /etc/os-release ]]; then
-  OS_ID=$(grep    -oP '(?<=^ID=)["\047]?\K[^"'\'']+' /etc/os-release | tr '[:upper:]' '[:lower:]' || true)
-  OS_VERSION=$(grep -oP '(?<=^VERSION_ID=)["\047]?\K[^"'\'']+' /etc/os-release | cut -d. -f1 || true)
+  source /etc/os-release
+  OS_ID="${ID,,}"        # lowercase: ubuntu, debian, centos, rhel, fedora, rocky, almalinux
+  OS_VERSION="${VERSION_ID%%.*}"  # major version only
+elif [[ -f /etc/redhat-release ]]; then
+  OS_ID="centos"
+  OS_VERSION=$(grep -oE '[0-9]+' /etc/redhat-release | head -1)
 fi
 
-# Method 2: fallback to /etc/redhat-release
-if [[ -z "$OS_ID" && -f /etc/redhat-release ]]; then
-  if grep -qi "centos" /etc/redhat-release; then
-    OS_ID="centos"
-  elif grep -qi "red hat" /etc/redhat-release; then
-    OS_ID="rhel"
-  fi
-  OS_VERSION=$(grep -oE '[0-9]+' /etc/redhat-release | head -1 || true)
-fi
-
-# Method 3: direct command detection
-if [[ -z "$OS_ID" ]]; then
-  if command -v apt-get &>/dev/null; then OS_ID="ubuntu"
-  elif command -v dnf   &>/dev/null; then OS_ID="fedora"
-  elif command -v yum   &>/dev/null; then OS_ID="centos"
-  fi
-fi
-
-# Ensure OS_VERSION is a plain integer
-OS_VERSION="${OS_VERSION//[^0-9]/}"
-OS_VERSION="${OS_VERSION:-0}"
-
-# Set package manager
 case "$OS_ID" in
-  ubuntu|debian|linuxmint|pop)
+  ubuntu|debian|linuxmint)
     PKG_MANAGER="apt"
     ;;
-  centos|rhel|fedora|rocky|almalinux|ol|amzn)
-    if [[ "$OS_VERSION" -ge 8 ]]; then
+  centos|rhel|fedora|rocky|almalinux|ol)
+    PKG_MANAGER="yum"
+    # CentOS 8+ / RHEL 8+ use dnf
+    if [[ "$OS_VERSION" -ge 8 ]] 2>/dev/null; then
       PKG_MANAGER="dnf"
-    else
-      PKG_MANAGER="yum"
     fi
     ;;
   *)
-    warn "未识别的系统：'${OS_ID}'，尝试自动检测..."
-    if   command -v dnf     &>/dev/null; then PKG_MANAGER="dnf"
-    elif command -v yum     &>/dev/null; then PKG_MANAGER="yum"
+    warn "未识别的系统：${OS_ID}，尝试自动检测包管理器"
+    if command -v dnf  &>/dev/null; then PKG_MANAGER="dnf"
+    elif command -v yum  &>/dev/null; then PKG_MANAGER="yum"
     elif command -v apt-get &>/dev/null; then PKG_MANAGER="apt"
-    else error "无法确定包管理器，请手动安装"; fi
+    else error "无法确定包管理器，请手动安装依赖"
+    fi
     ;;
 esac
 
-info "系统：${OS_ID:-unknown} v${OS_VERSION} | 包管理器：${PKG_MANAGER}"
-info "CentOS 7 检测：OS_ID='${OS_ID}' OS_VERSION='${OS_VERSION}'"
+info "检测到系统：${OS_ID:-unknown} ${OS_VERSION} | 包管理器：${PKG_MANAGER}"
 
 # ── Node.js install helper ────────────────────────────────────
 _install_node() {
@@ -273,6 +253,11 @@ success "依赖安装完成"
 
 # ── Step 5.5: Install pm2 for daemon management ───────────────
 step "步骤 6/7：安装 PM2 进程管理器"
+
+# Reload nvm before any npm global install
+export NVM_DIR="${HOME}/.nvm"
+[[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+
 if command -v pm2 &>/dev/null; then
   success "PM2 已安装：$(pm2 --version)"
 else
@@ -317,6 +302,14 @@ echo "  ╚═══════════════════════
 echo -e "${NC}"
 echo -e "${BOLD}接下来的步骤：${NC}"
 echo ""
+# Show nvm notice for CentOS 7
+if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+  echo -e "  ${RED}⚠  CentOS 7 用户注意：${NC}每次新开终端需先执行："
+  echo -e "     ${YELLOW}source ~/.nvm/nvm.sh${NC}"
+  echo -e "     或执行以下命令让配置永久生效（重新登录后自动加载）："
+  echo -e "     ${YELLOW}echo 'source ~/.nvm/nvm.sh' >> ~/.bashrc && source ~/.bashrc${NC}"
+  echo ""
+fi
 echo -e "  ${YELLOW}1.${NC} 编辑配置文件："
 echo "     nano ${INSTALL_DIR}/.env"
 echo ""
@@ -344,3 +337,12 @@ echo ""
 echo -e "  ${YELLOW}8.${NC} 查看/修改定时任务（备用轮询）："
 echo "     crontab -l"
 echo ""
+
+# Final: ensure nvm is active in the current shell for CentOS 7
+if [[ "$OS_ID" =~ ^(centos|rhel)$ && "$OS_VERSION" == "7" ]]; then
+  echo -e "${YELLOW}正在激活 nvm 使 node 命令立即可用...${NC}"
+  export NVM_DIR="${HOME}/.nvm"
+  [[ -s "${NVM_DIR}/nvm.sh" ]] && source "${NVM_DIR}/nvm.sh"
+  echo "source ~/.nvm/nvm.sh" >> ~/.bashrc
+  echo -e "${GREEN}✓ node $(node --version 2>/dev/null || echo '请重新登录后执行') 已就绪${NC}"
+fi
