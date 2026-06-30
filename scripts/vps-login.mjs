@@ -22,7 +22,7 @@
 
 import { createServer }                               from "node:http";
 import { mkdirSync, writeFileSync, existsSync,
-         readFileSync }                               from "node:fs";
+         readFileSync, unlinkSync }              from "node:fs";
 import { resolve }                                    from "node:path";
 import { fileURLToPath }                              from "node:url";
 import { chromium }                                   from "playwright";
@@ -90,11 +90,58 @@ mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const EXISTING_RT   = process.env.GOOGLE_REFRESH_TOKEN;
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
   console.error("❌ 请在 .env 中配置 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET");
   console.error("   参考 get-refresh-token.mjs 获取 OAuth 凭据");
   process.exit(1);
+}
+
+// ── Reuse existing refresh_token if still valid ───────────────────────────
+if (EXISTING_RT) {
+  console.log("\n🔑 检测到已有 refresh_token，正在验证...");
+  try {
+    const testRes = await fetch("https://oauth2.googleapis.com/token", {
+      method:  "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body:    new URLSearchParams({
+        client_id:     CLIENT_ID,
+        client_secret: CLIENT_SECRET,
+        refresh_token: EXISTING_RT,
+        grant_type:    "refresh_token",
+      }),
+    });
+    const testData = await testRes.json();
+    if (testData.access_token) {
+      console.log("✓ refresh_token 仍然有效，无需重新授权（避免触发 Grant Limit）");
+      let email = "unknown";
+      try {
+        const i = await (await fetch("https://www.googleapis.com/oauth2/v2/userinfo",
+          { headers: { Authorization: `Bearer ${testData.access_token}` } })).json();
+        email = i.email ?? "unknown";
+      } catch { /* ignore */ }
+      const sessionData = {
+        createdAt: new Date().toISOString(), email,
+        loginMethod: "vps-oauth",
+        accessToken: testData.access_token,
+        refreshToken: EXISTING_RT,
+        cookies: [],
+      };
+      const sFile = resolve(SESSION_DIR, "youtube-session.json");
+      writeFileSync(sFile, JSON.stringify(sessionData, null, 2));
+      if (process.env.SESSION_ENCRYPTION_KEY) {
+        const { encryptSession } = await import("./encrypt-session.mjs");
+        writeFileSync(resolve(SESSION_DIR, "youtube-session.enc"),
+          encryptSession(JSON.stringify(sessionData, null, 2)));
+        unlinkSync(sFile);
+        console.log("🔒 Session 已加密保存");
+      }
+      console.log(`✅ Session 已更新（账号：${email}）\n✓ 现在可以运行：node run.mjs\n`);
+      process.exit(0);
+    }
+    console.log(`⚠  现有 refresh_token 无效（${testData.error}），继续重新授权...`);
+  } catch { console.log("⚠  验证失败，继续重新授权..."); }
 }
 
 // ── Get VPS public IP ─────────────────────────────────────────────────────
