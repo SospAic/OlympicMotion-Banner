@@ -89,19 +89,34 @@ fi
 cd "$INSTALL_DIR"
 
 # ── Step 5: Install npm deps + Playwright browser ────────────
-step "步骤 5/6：安装 Node 依赖和 Playwright 浏览器"
+step "步骤 5/7：安装 Node 依赖和 Playwright 浏览器"
 npm ci --silent
 node node_modules/playwright/cli.js install chromium
 success "依赖安装完成"
 
+# ── Step 5.5: Install pm2 for daemon management ───────────────
+step "步骤 6/7：安装 PM2 进程管理器"
+if command -v pm2 &>/dev/null; then
+  success "PM2 已安装：$(pm2 --version)"
+else
+  npm install -g pm2 --silent
+  success "PM2 安装完成：$(pm2 --version)"
+fi
+
 # ── Step 6: Create .env if not exists ────────────────────────
-step "步骤 6/6：创建配置文件"
+step "步骤 7/7：创建配置文件"
 if [[ ! -f ".env" ]]; then
   cp .env.example .env
-  warn ".env 配置文件已创建，请编辑填入真实值：nano ${INSTALL_DIR}/.env"
+  chmod 600 .env
+  warn ".env 配置文件已创建（权限已锁定为 600）"
+  warn "请编辑填入真实值：nano ${INSTALL_DIR}/.env"
 else
-  success ".env 已存在，跳过创建"
+  chmod 600 .env
+  success ".env 已存在，权限已设为 600"
 fi
+
+# Lock down sensitive directories
+chmod 700 "${INSTALL_DIR}/.session" 2>/dev/null || mkdir -p "${INSTALL_DIR}/.session" && chmod 700 "${INSTALL_DIR}/.session"
 
 # ── Create log file ───────────────────────────────────────────
 touch "$LOG_FILE" 2>/dev/null || LOG_FILE="${INSTALL_DIR}/banner.log"
@@ -128,18 +143,27 @@ echo ""
 echo -e "  ${YELLOW}1.${NC} 编辑配置文件："
 echo "     nano ${INSTALL_DIR}/.env"
 echo ""
-echo -e "  ${YELLOW}2.${NC} 执行一次性 OAuth 授权（获取 YouTube 上传权限）："
-echo "     cd ${INSTALL_DIR} && node scripts/setup-session.mjs"
+echo -e "  ${YELLOW}2.${NC} 生成 Session 加密密钥（强烈推荐）："
+echo "     cd ${INSTALL_DIR} && node scripts/encrypt-session.mjs --gen-key"
+echo "     # 将输出的 SESSION_ENCRYPTION_KEY 填入 .env"
 echo ""
-echo -e "  ${YELLOW}3.${NC} 测试生成（不上传）："
+echo -e "  ${YELLOW}3.${NC} 执行一次性登录（获取 YouTube 上传权限）："
+echo "     cd ${INSTALL_DIR} && node scripts/interactive-login.mjs"
+echo ""
+echo -e "  ${YELLOW}4.${NC} 测试生成（不上传）："
 echo "     cd ${INSTALL_DIR} && node run.mjs --no-upload"
 echo ""
-echo -e "  ${YELLOW}4.${NC} 完整测试（生成 + 上传）："
-echo "     cd ${INSTALL_DIR} && node run.mjs"
+echo -e "  ${YELLOW}5.${NC} 启动即时更新守护进程（PM2）："
+echo "     cd ${INSTALL_DIR} && pm2 start scripts/watch-daemon.mjs --name banner-daemon"
+echo "     pm2 save && pm2 startup"
 echo ""
-echo -e "  ${YELLOW}5.${NC} 查看日志："
-echo "     tail -f ${LOG_FILE}"
+echo -e "  ${YELLOW}6.${NC} 查看守护进程状态："
+echo "     pm2 status"
+echo "     pm2 logs banner-daemon"
 echo ""
-echo -e "  ${YELLOW}6.${NC} 查看/修改定时任务："
+echo -e "  ${YELLOW}7.${NC} 健康检查："
+echo "     curl http://localhost:${WEBHOOK_PORT:-4174}/health"
+echo ""
+echo -e "  ${YELLOW}8.${NC} 查看/修改定时任务（备用轮询）："
 echo "     crontab -l"
 echo ""

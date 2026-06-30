@@ -195,4 +195,25 @@ if (authCookies.length < 3) {
   console.log("\n✓ Session 有效，可以运行：node run.mjs");
 }
 
+// Auto-encrypt if SESSION_ENCRYPTION_KEY is set
+if (process.env.SESSION_ENCRYPTION_KEY) {
+  try {
+    const { encryptSession } = await import("./encrypt-session.mjs");
+    const enc = encryptSession(JSON.stringify(sessionData, null, 2));
+    const encFile = resolve(SESSION_DIR, "youtube-session.enc");
+    writeFileSync(encFile, enc);
+    // Remove plain text file after encryption
+    const { unlinkSync } = await import("node:fs");
+    unlinkSync(SESSION_FILE);
+    console.log(`\n🔒 Session 已加密保存：${encFile}`);
+    console.log("   明文文件已自动删除");
+  } catch (e) {
+    console.warn("⚠  自动加密失败：", e.message);
+    console.warn("   可手动加密：node scripts/encrypt-session.mjs --encrypt");
+  }
+} else {
+  console.log("\n💡 提示：设置 SESSION_ENCRYPTION_KEY 可自动加密 session 文件");
+  console.log("   生成密钥：node scripts/encrypt-session.mjs --gen-key");
+}
+
 console.log("═══════════════════════════════════════════════\n");

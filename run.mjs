@@ -52,7 +52,14 @@ const manualSubs = args.find(a => a.startsWith("--subs="))?.split("=")[1];
 // ── Helpers ───────────────────────────────────────────────────────────────
 function log(msg) {
   const ts = new Date().toISOString();
-  console.log(`[${ts}] ${msg}`);
+  // Strip any accidental credential leaks from log output
+  const safe = msg
+    .replace(/AIza[A-Za-z0-9_-]{35}/g,  "AIza***")
+    .replace(/key=[^&\s"']+/gi,          "key=***")
+    .replace(/Bearer [A-Za-z0-9._-]+/g,  "Bearer ***")
+    .replace(/refresh_token=[^&\s"']+/g, "refresh_token=***")
+    .replace(/client_secret=[^&\s"']+/g, "client_secret=***");
+  console.log(`[${ts}] ${safe}`);
 }
 
 async function waitForServer(url, tries = 30) {

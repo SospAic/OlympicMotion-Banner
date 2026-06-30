@@ -60,7 +60,27 @@ if (existsSync(SESSION_FILE)) {
 // 模式 S：Session 文件模式（VPS 专用，最可靠）
 // ══════════════════════════════════════════════════════════════════════════
 async function uploadViaSession(sessionFile) {
-  const sessionData = JSON.parse(readFileSync(sessionFile, "utf8"));
+  // Load session — supports both encrypted (.enc) and plain (.json)
+  let sessionData;
+  const encFile = sessionFile.replace(".json", ".enc");
+
+  if (existsSync(encFile) && process.env.SESSION_ENCRYPTION_KEY) {
+    try {
+      const { decryptSession } = await import("../scripts/encrypt-session.mjs");
+      const enc = readFileSync(encFile, "utf8").trim();
+      sessionData = JSON.parse(decryptSession(enc));
+      console.log("🔒 已加载加密 session");
+    } catch (e) {
+      console.error("❌ Session 解密失败：", e.message);
+      process.exit(1);
+    }
+  } else if (existsSync(sessionFile)) {
+    sessionData = JSON.parse(readFileSync(sessionFile, "utf8"));
+    console.log("📄 已加载明文 session（建议加密：node scripts/encrypt-session.mjs --encrypt）");
+  } else {
+    console.error("❌ 未找到 session 文件，请运行：node scripts/interactive-login.mjs");
+    process.exit(1);
+  }
   console.log(`  账号：${sessionData.email ?? "unknown"}`);
   console.log(`  Session 创建时间：${sessionData.createdAt}`);
   console.log(`  Cookie 数量：${sessionData.cookies?.length ?? 0}`);
