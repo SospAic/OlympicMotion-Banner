@@ -1,11 +1,11 @@
 name: Generate & Upload Banner
 
 on:
-  # 每2小时自动运行（在免费额度内：每天12次，每月360次，远低于2000分钟上限）
-  schedule:
-    - cron: "0 */2 * * *"
+  # 定时任务已暂停 — VPS 本地部署已接管，无需云端运行
+  # schedule:
+  #   - cron: "0 */2 * * *"
 
-  # 手动触发，可覆盖订阅数
+  # 手动触发保留（用于测试）
   workflow_dispatch:
     inputs:
       subscribers:
