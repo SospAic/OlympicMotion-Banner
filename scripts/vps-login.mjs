@@ -31,35 +31,7 @@ const ROOT         = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_DIR  = resolve(ROOT, ".session");
 const SESSION_FILE = resolve(SESSION_DIR, "youtube-session.json");
 const CALLBACK_PORT = 8080;
-const RAW_DOMAIN    = (process.env.DOMAIN ?? "").trim().replace(/[\r\n]/g, "");
-// Validate domain — must contain at least one dot and no spaces/slashes
-const DOMAIN_VALID  = /^[a-z0-9][a-z0-9\-]*(\.[a-z0-9\-]+)+$/i.test(RAW_DOMAIN);
-const DOMAIN        = DOMAIN_VALID ? RAW_DOMAIN : "";
-const REDIRECT_URI  = DOMAIN
-  ? `https://${DOMAIN}/oauth/callback`
-  : `http://localhost:${CALLBACK_PORT}/callback`;
-const USE_DOMAIN    = !!DOMAIN;
 
-if (RAW_DOMAIN && !DOMAIN_VALID) {
-  console.warn(`\n⚠  .env 中的 DOMAIN="${RAW_DOMAIN}" 格式不正确，已忽略`);
-  console.warn("   请运行 node scripts/setup-caddy.mjs 重新配置域名\n");
-}
-if (!USE_DOMAIN) {
-  console.warn("\n⚠  未配置有效域名，使用 localhost 回调（可能被 Google 拒绝）");
-  console.warn("   建议先运行：node scripts/setup-caddy.mjs\n");
-} else {
-  console.log(`\n  回调地址：${REDIRECT_URI}`);
-console.log(`\n  💡 确认清单：`);
-if (USE_DOMAIN) {
-  console.log(`  1. DNS: ${DOMAIN} 的 A 记录已指向此 VPS`);
-  console.log(`  2. 防火墙: 端口 80/443 已开放（Caddy 需要）`);
-  console.log(`  3. Caddy: systemctl status caddy（应为 active）`);
-  console.log(`  4. Google Cloud Console: 已添加回调地址 ${REDIRECT_URI}`);
-} else {
-  console.log(`  1. SSH 隧道: ssh -L ${CALLBACK_PORT}:localhost:${CALLBACK_PORT} -N root@${vpsIp}`);
-  console.log(`  2. 防火墙: 不需要开放端口（通过 SSH 隧道）`);
-}
-}
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube",
   "https://www.googleapis.com/auth/youtube.upload",
@@ -87,6 +59,23 @@ try {
 
 mkdirSync(SESSION_DIR, { recursive: true });
 mkdirSync(resolve(ROOT, "dist"), { recursive: true });
+
+// ── Compute DOMAIN after .env is loaded ──────────────────────────────────
+const RAW_DOMAIN   = (process.env.DOMAIN ?? "").trim().replace(/[\r\n]/g, "");
+const DOMAIN_VALID = /^[a-z0-9][a-z0-9\-]*(\.[a-z0-9\-]+)+$/i.test(RAW_DOMAIN);
+const DOMAIN       = DOMAIN_VALID ? RAW_DOMAIN : "";
+const REDIRECT_URI = DOMAIN
+  ? `https://${DOMAIN}/oauth/callback`
+  : `http://localhost:${CALLBACK_PORT}/callback`;
+const USE_DOMAIN   = !!DOMAIN;
+
+if (RAW_DOMAIN && !DOMAIN_VALID) {
+  console.warn(`\n⚠  DOMAIN="${RAW_DOMAIN}" 格式不正确，使用 localhost 回调`);
+} else if (!USE_DOMAIN) {
+  console.warn("\n⚠  未配置 DOMAIN，使用 localhost 回调（需要 SSH 隧道）");
+} else {
+  console.log(`\n  ✓ 域名模式：${REDIRECT_URI}`);
+}
 
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
