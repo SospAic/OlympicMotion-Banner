@@ -26,6 +26,7 @@ import { chromium }                 from "playwright";
 const ROOT          = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const BANNER_FILE   = resolve(process.env.BANNER_FILE ?? "dist/banner.png");
 const SESSION_FILE  = resolve(ROOT, ".session/youtube-session.json");
+const SESSION_ENC   = resolve(ROOT, ".session/youtube-session.enc");
 const YT_COOKIES    = process.env.YOUTUBE_COOKIES;
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -39,8 +40,11 @@ if (!existsSync(BANNER_FILE)) {
 }
 
 // ── Route to correct mode ─────────────────────────────────────────────────
-if (existsSync(SESSION_FILE)) {
-  console.log("💾 检测到 Session 文件，使用 Session 模式（模式 S）");
+const hasSession = existsSync(SESSION_ENC) || existsSync(SESSION_FILE);
+
+if (hasSession) {
+  const which = existsSync(SESSION_ENC) ? "加密" : "明文";
+  console.log(`💾 检测到 Session ${which}文件，使用 Session 模式（模式 S）`);
   await uploadViaSession(SESSION_FILE);
 } else if (YT_COOKIES) {
   console.log("🍪 检测到 YOUTUBE_COOKIES，使用 Cookie 模式（模式 A）");
@@ -50,7 +54,7 @@ if (existsSync(SESSION_FILE)) {
   await uploadViaOAuth();
 } else {
   console.error("❌ 未配置任何上传凭据，请选择以下任意一种方式：");
-  console.error("  模式 S（VPS 推荐）：运行 node scripts/interactive-login.mjs 生成 session");
+  console.error("  模式 S（VPS 推荐）：运行 node scripts/vps-login.mjs 生成 session");
   console.error("  模式 A（GitHub Actions）：设置环境变量 YOUTUBE_COOKIES");
   console.error("  模式 B（合作伙伴账号）：设置 GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN");
   process.exit(1);
@@ -60,11 +64,17 @@ if (existsSync(SESSION_FILE)) {
 // 模式 S：Session 文件模式（VPS 专用，最可靠）
 // ══════════════════════════════════════════════════════════════════════════
 async function uploadViaSession(sessionFile) {
-  // Load session — supports both encrypted (.enc) and plain (.json)
-  let sessionData;
+  // Load session — prefer encrypted .enc file over plain .json
   const encFile = sessionFile.replace(".json", ".enc");
+  let sessionData;
 
-  if (existsSync(encFile) && process.env.SESSION_ENCRYPTION_KEY) {
+  if (existsSync(encFile)) {
+    const key = process.env.SESSION_ENCRYPTION_KEY;
+    if (!key) {
+      console.error("❌ 找到加密 Session 文件但未设置 SESSION_ENCRYPTION_KEY");
+      console.error("   请在 .env 中添加 SESSION_ENCRYPTION_KEY");
+      process.exit(1);
+    }
     try {
       const { decryptSession } = await import("../scripts/encrypt-session.mjs");
       const enc = readFileSync(encFile, "utf8").trim();
@@ -78,7 +88,7 @@ async function uploadViaSession(sessionFile) {
     sessionData = JSON.parse(readFileSync(sessionFile, "utf8"));
     console.log("📄 已加载明文 session（建议加密：node scripts/encrypt-session.mjs --encrypt）");
   } else {
-    console.error("❌ 未找到 session 文件，请运行：node scripts/interactive-login.mjs");
+    console.error("❌ 未找到 session 文件，请运行：node scripts/vps-login.mjs");
     process.exit(1);
   }
   console.log(`  账号：${sessionData.email ?? "unknown"}`);
