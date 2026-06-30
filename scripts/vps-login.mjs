@@ -31,10 +31,25 @@ const ROOT         = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_DIR  = resolve(ROOT, ".session");
 const SESSION_FILE = resolve(SESSION_DIR, "youtube-session.json");
 const CALLBACK_PORT = 8080;
-const REDIRECT_URI  = process.env.DOMAIN
-  ? `https://${process.env.DOMAIN}/oauth/callback`
+const RAW_DOMAIN    = (process.env.DOMAIN ?? "").trim().replace(/[\r\n]/g, "");
+// Validate domain — must contain at least one dot and no spaces/slashes
+const DOMAIN_VALID  = /^[a-z0-9][a-z0-9\-]*(\.[a-z0-9\-]+)+$/i.test(RAW_DOMAIN);
+const DOMAIN        = DOMAIN_VALID ? RAW_DOMAIN : "";
+const REDIRECT_URI  = DOMAIN
+  ? `https://${DOMAIN}/oauth/callback`
   : `http://localhost:${CALLBACK_PORT}/callback`;
-const USE_DOMAIN    = !!process.env.DOMAIN;
+const USE_DOMAIN    = !!DOMAIN;
+
+if (RAW_DOMAIN && !DOMAIN_VALID) {
+  console.warn(`\n⚠  .env 中的 DOMAIN="${RAW_DOMAIN}" 格式不正确，已忽略`);
+  console.warn("   请运行 node scripts/setup-caddy.mjs 重新配置域名\n");
+}
+if (!USE_DOMAIN) {
+  console.warn("\n⚠  未配置有效域名，使用 localhost 回调（可能被 Google 拒绝）");
+  console.warn("   建议先运行：node scripts/setup-caddy.mjs\n");
+} else {
+  console.log(`\n  回调地址：${REDIRECT_URI}`);
+}
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube",
   "https://www.googleapis.com/auth/youtube.upload",
