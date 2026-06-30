@@ -1,22 +1,21 @@
 /**
  * Banner Uploader
- * 支持两种模式，自动选择：
+ * 支持三种模式，自动选择：
  *
- * 模式 A — Cookie 模式（推荐，适合个人账号）
+ * 模式 S — Session 文件模式（VPS 推荐，最可靠）
+ *   用 scripts/interactive-login.mjs 或 scripts/setup-session.mjs 生成的
+ *   .session/youtube-session.json，Playwright 直接复用登录状态。
+ *   所需文件：.session/youtube-session.json
+ *
+ * 模式 A — Cookie 字符串模式（GitHub Actions 推荐）
  *   用手机 Safari 导出的 Cookie 字符串，Playwright 直接登录 YouTube Studio 上传。
- *   所需 Secret：YOUTUBE_COOKIES
+ *   所需 Secret/环境变量：YOUTUBE_COOKIES
  *
- * 模式 B — OAuth API 模式（备用，仅适合 YouTube 合作伙伴账号）
+ * 模式 B — OAuth API 模式（仅 YouTube 合作伙伴账号可用）
  *   通过 YouTube Data API channelBanners.insert 上传。
- *   所需 Secret：GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN,
- *               YOUTUBE_CHANNEL_ID
+ *   所需：GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, YOUTUBE_CHANNEL_ID
  *
- * 优先级：有 YOUTUBE_COOKIES → 用模式 A，否则尝试模式 B。
- *
- * Cookie 获取方法（iPhone Safari）：
- *   1. Safari 打开 studio.youtube.com（已登录状态）
- *   2. 地址栏输入：javascript:prompt('Cookie',document.cookie)
- *   3. 弹窗里的内容就是 Cookie，复制存入 GitHub Secret: YOUTUBE_COOKIES
+ * 优先级：Session 文件 > YOUTUBE_COOKIES > OAuth API
  */
 
 import { readFileSync, existsSync } from "node:fs";
@@ -24,7 +23,9 @@ import { resolve }                  from "node:path";
 import { fileURLToPath }            from "node:url";
 import { chromium }                 from "playwright";
 
+const ROOT          = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const BANNER_FILE   = resolve(process.env.BANNER_FILE ?? "dist/banner.png");
+const SESSION_FILE  = resolve(ROOT, ".session/youtube-session.json");
 const YT_COOKIES    = process.env.YOUTUBE_COOKIES;
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -38,21 +39,70 @@ if (!existsSync(BANNER_FILE)) {
 }
 
 // ── Route to correct mode ─────────────────────────────────────────────────
-if (YT_COOKIES) {
+if (existsSync(SESSION_FILE)) {
+  console.log("💾 检测到 Session 文件，使用 Session 模式（模式 S）");
+  await uploadViaSession(SESSION_FILE);
+} else if (YT_COOKIES) {
   console.log("🍪 检测到 YOUTUBE_COOKIES，使用 Cookie 模式（模式 A）");
   await uploadViaCookies(YT_COOKIES);
 } else if (CLIENT_ID && CLIENT_SECRET && REFRESH_TOKEN) {
-  console.log("🔑 未检测到 YOUTUBE_COOKIES，使用 OAuth API 模式（模式 B）");
+  console.log("🔑 未检测到 Session/Cookie，使用 OAuth API 模式（模式 B）");
   await uploadViaOAuth();
 } else {
-  console.error("❌ 未配置任何上传凭据，请设置以下任意一组 GitHub Secrets：");
-  console.error("  模式 A（推荐）：YOUTUBE_COOKIES");
-  console.error("  模式 B（备用）：GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN + YOUTUBE_CHANNEL_ID");
+  console.error("❌ 未配置任何上传凭据，请选择以下任意一种方式：");
+  console.error("  模式 S（VPS 推荐）：运行 node scripts/interactive-login.mjs 生成 session");
+  console.error("  模式 A（GitHub Actions）：设置环境变量 YOUTUBE_COOKIES");
+  console.error("  模式 B（合作伙伴账号）：设置 GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN");
   process.exit(1);
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 模式 A：Cookie + Playwright 浏览器自动化
+// 模式 S：Session 文件模式（VPS 专用，最可靠）
+// ══════════════════════════════════════════════════════════════════════════
+async function uploadViaSession(sessionFile) {
+  const sessionData = JSON.parse(readFileSync(sessionFile, "utf8"));
+  console.log(`  账号：${sessionData.email ?? "unknown"}`);
+  console.log(`  Session 创建时间：${sessionData.createdAt}`);
+  console.log(`  Cookie 数量：${sessionData.cookies?.length ?? 0}`);
+
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    viewport:  { width: 1280, height: 900 },
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  });
+
+  // Restore cookies from session
+  if (sessionData.cookies?.length > 0) {
+    await context.addCookies(sessionData.cookies);
+    console.log(`  已加载 ${sessionData.cookies.length} 个 Cookie`);
+  }
+
+  const page = await context.newPage();
+
+  // Navigate to YouTube Studio branding page
+  console.log("📺 正在打开 YouTube Studio 品牌推广页面...");
+  await page.goto(
+    "https://studio.youtube.com/channel/default/customization/branding",
+    { waitUntil: "networkidle", timeout: 30_000 }
+  );
+
+  const url = page.url();
+  console.log("  当前 URL：", url.substring(0, 80));
+
+  if (url.includes("accounts.google.com") || url.includes("signin")) {
+    await page.screenshot({ path: BANNER_FILE.replace(".png", "-debug-session-expired.png") });
+    await browser.close();
+    console.error("❌ Session 已过期，需要重新登录");
+    console.error("  请运行：node scripts/interactive-login.mjs");
+    process.exit(1);
+  }
+
+  // Reuse the same upload logic as Cookie mode
+  await _performUpload(page, browser);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 模式 A：Cookie 字符串模式（GitHub Actions）
 // ══════════════════════════════════════════════════════════════════════════
 async function uploadViaCookies(cookieStr) {
   // Parse "key=value; key2=value2" string into Playwright cookie objects
@@ -65,7 +115,6 @@ async function uploadViaCookies(cookieStr) {
       if (eqIdx < 0) return [];
       const name  = pair.slice(0, eqIdx).trim();
       const value = pair.slice(eqIdx + 1).trim();
-      // Set cookies for both youtube.com and google.com domains
       return [
         { name, value, domain: ".youtube.com",     path: "/", secure: true, sameSite: "None" },
         { name, value, domain: ".google.com",       path: "/", secure: true, sameSite: "None" },
@@ -84,7 +133,6 @@ async function uploadViaCookies(cookieStr) {
   await context.addCookies(cookies);
   const page = await context.newPage();
 
-  // ── Navigate to YouTube Studio branding page ──────────────────────────
   console.log("📺 正在打开 YouTube Studio 品牌推广页面...");
   await page.goto(
     "https://studio.youtube.com/channel/default/customization/branding",
@@ -92,31 +140,30 @@ async function uploadViaCookies(cookieStr) {
   );
 
   const url = page.url();
-  console.log("  当前 URL：", url);
+  console.log("  当前 URL：", url.substring(0, 80));
 
-  // Check if we were redirected to login
   if (url.includes("accounts.google.com") || url.includes("signin")) {
     await page.screenshot({ path: BANNER_FILE.replace(".png", "-debug-login.png") });
     await browser.close();
-    console.error("❌ Cookie 已过期或无效，被重定向到登录页面");
-    console.error("  请重新从 iPhone Safari 导出 Cookie 并更新 YOUTUBE_COOKIES Secret");
-    console.error("  方法：Safari 打开 studio.youtube.com → 地址栏输入 javascript:prompt('Cookie',document.cookie)");
+    console.error("❌ Cookie 已过期或无效");
+    console.error("  GitHub Actions 用户：更新 YOUTUBE_COOKIES Secret");
+    console.error("  VPS 用户：运行 node scripts/interactive-login.mjs 重新登录");
     process.exit(1);
   }
 
-  // ── Wait for page to fully load ───────────────────────────────────────
-  console.log("  等待页面加载完成...");
+  await _performUpload(page, browser);
+}
+
+// ── Shared upload logic (used by both Mode S and Mode A) ──────────────────
+async function _performUpload(page, browser) {
   await page.waitForTimeout(3000);
 
-  // Take a screenshot for debugging
   const debugPath = BANNER_FILE.replace("banner.png", "debug-studio.png");
   await page.screenshot({ path: debugPath });
-  console.log(`  调试截图已保存：${debugPath}`);
+  console.log(`  调试截图：${debugPath}`);
 
-  // ── Find and click the banner upload area ─────────────────────────────
   console.log("🖼️  正在查找 Banner 上传区域...");
 
-  // YouTube Studio banner section selectors (may need updating if YouTube changes UI)
   const bannerSelectors = [
     "input[type='file'][accept*='image']",
     "[data-testid='banner-upload']",
@@ -127,107 +174,68 @@ async function uploadViaCookies(cookieStr) {
 
   let fileInput = null;
 
-  // Try to find file input directly
   for (const sel of bannerSelectors) {
     const el = await page.$(sel);
-    if (el) {
-      fileInput = el;
-      console.log(`  找到上传输入框：${sel}`);
-      break;
-    }
+    if (el) { fileInput = el; console.log(`  找到上传输入框：${sel}`); break; }
   }
 
-  // If not found, look for "Edit" / "Change" buttons in banner section
   if (!fileInput) {
     console.log("  未直接找到文件输入，尝试点击编辑按钮...");
-
     const editSelectors = [
       "button[aria-label*='banner' i]",
       "button[aria-label*='Banner' i]",
       "ytcp-button:has-text('CHANGE')",
       "ytcp-button:has-text('UPLOAD')",
-      "#banner-button",
       "[aria-label='Edit channel art']",
-      "[title='Channel banner']",
     ];
 
     for (const sel of editSelectors) {
       try {
         const el = await page.$(sel);
         if (el) {
-          console.log(`  点击编辑按钮：${sel}`);
           await el.click();
           await page.waitForTimeout(2000);
-          // Now try to find file input again
           fileInput = await page.$("input[type='file']");
-          if (fileInput) break;
+          if (fileInput) { console.log(`  通过按钮找到上传框：${sel}`); break; }
         }
       } catch { /* continue */ }
     }
   }
 
   if (!fileInput) {
-    // Last resort: hover over the banner area to reveal upload button
-    console.log("  尝试悬停显示上传按钮...");
-    try {
-      const bannerImg = await page.$("ytcp-channel-banner, .channel-banner, #channel-banner-container");
-      if (bannerImg) {
-        await bannerImg.hover();
-        await page.waitForTimeout(1500);
-        fileInput = await page.$("input[type='file']");
-      }
-    } catch { /* continue */ }
-  }
-
-  if (!fileInput) {
-    const finalDebug = BANNER_FILE.replace("banner.png", "debug-no-input.png");
-    await page.screenshot({ path: finalDebug, fullPage: true });
+    const noInputDebug = BANNER_FILE.replace("banner.png", "debug-no-input.png");
+    await page.screenshot({ path: noInputDebug, fullPage: true });
     await browser.close();
-    console.error("❌ 无法找到 Banner 上传入口");
-    console.error(`  调试截图已保存：${finalDebug}`);
-    console.error("  YouTube Studio 页面结构可能已更新，请提交 issue 附上截图");
+    console.error("❌ 无法找到 Banner 上传入口，调试截图：", noInputDebug);
     process.exit(1);
   }
 
-  // ── Upload the banner file ────────────────────────────────────────────
-  console.log(`📤 正在上传 Banner 文件：${BANNER_FILE}`);
+  console.log(`📤 正在上传：${BANNER_FILE}`);
   await fileInput.setInputFiles(BANNER_FILE);
   await page.waitForTimeout(2000);
 
-  // ── Confirm / Save ────────────────────────────────────────────────────
   console.log("💾 正在保存...");
-
   const saveSelectors = [
-    "button[aria-label*='Done' i]",
-    "button[aria-label*='Save' i]",
     "ytcp-button:has-text('DONE')",
     "ytcp-button:has-text('SAVE')",
-    "#save-button",
-    "ytcp-ve.save-button",
+    "button[aria-label*='Done' i]",
+    "button[aria-label*='Save' i]",
   ];
 
-  let saved = false;
   for (const sel of saveSelectors) {
     try {
       const btn = await page.$(sel);
       if (btn) {
-        console.log(`  点击保存按钮：${sel}`);
         await btn.click();
         await page.waitForTimeout(3000);
-        saved = true;
+        console.log(`  已点击保存：${sel}`);
         break;
       }
     } catch { /* continue */ }
   }
 
-  if (!saved) {
-    console.warn("  ⚠️  未找到保存按钮，图片可能已自动保存");
-  }
-
   const finalPath = BANNER_FILE.replace("banner.png", "debug-final.png");
   await page.screenshot({ path: finalPath });
-  console.log(`  最终截图已保存：${finalPath}`);
-
   await browser.close();
   console.log("✅ Banner 上传完成！");
 }
