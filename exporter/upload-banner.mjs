@@ -320,7 +320,16 @@ async function uploadViaOAuth() {
 
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) {
+    const isInvalidGrant = tokenData.error === "invalid_grant";
     console.error("❌ 获取 access_token 失败：", JSON.stringify(tokenData));
+    if (isInvalidGrant) {
+      console.error("\n  refresh_token 已失效（invalid_grant）");
+      console.error("  原因：OAuth 应用处于测试模式时 token 7天后过期，或重复授权导致旧 token 被撤销");
+      console.error("\n  解决步骤：");
+      console.error("  1. 删除旧 session：rm -f .session/youtube-session.enc .session/youtube-session.json");
+      console.error("  2. 重新授权：node scripts/vps-login.mjs");
+      console.error("  3. 建议将 OAuth 应用发布为正式版防止再次过期\n");
+    }
     process.exit(1);
   }
   const ACCESS_TOKEN = tokenData.access_token;
