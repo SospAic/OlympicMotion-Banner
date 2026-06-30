@@ -73,8 +73,17 @@ const env = loadEnv();
 // Get domain
 let domain = env.DOMAIN ?? "";
 if (!domain) {
-  domain = (await ask("请输入你的域名（如 banner.example.com）：")).trim();
-  if (!domain) { console.error("❌ 域名不能为空"); process.exit(1); }
+  while (true) {
+    domain = (await ask("请输入你的域名（如 banner.example.com，不含 http://）：")).trim()
+      .replace(/^https?:\/\//i, "")   // strip protocol
+      .replace(/\/.*$/, "")            // strip path
+      .replace(/\r/g, "");             // strip \r
+    if (!domain) { console.error("❌ 域名不能为空，请重新输入"); continue; }
+    if (!/^[a-z0-9]([a-z0-9\-\.]+)?[a-z0-9]$/i.test(domain)) {
+      console.error(`❌ 域名格式不正确：${domain}，请重新输入`); continue;
+    }
+    break;
+  }
   saveEnv("DOMAIN", domain);
 }
 console.log(`\n✓ 域名：${domain}`);
