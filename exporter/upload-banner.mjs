@@ -95,6 +95,32 @@ async function uploadViaSession(sessionFile) {
   console.log(`  Session 创建时间：${sessionData.createdAt}`);
   console.log(`  Cookie 数量：${sessionData.cookies?.length ?? 0}`);
 
+  // vps-oauth sessions use refresh_token, not browser cookies
+  if (sessionData.loginMethod === "vps-oauth") {
+    console.log("  检测到 VPS OAuth Session，使用 token 模式上传");
+    const refreshToken = sessionData.refreshToken
+      || process.env.GOOGLE_REFRESH_TOKEN;
+    if (!refreshToken) {
+      console.error("❌ Session 中没有 refresh_token，请重新运行 vps-login.mjs");
+      process.exit(1);
+    }
+    // Temporarily set env vars for uploadViaOAuth
+    process.env.GOOGLE_REFRESH_TOKEN = refreshToken;
+    if (!process.env.GOOGLE_CLIENT_ID && sessionData.clientId)
+      process.env.GOOGLE_CLIENT_ID = sessionData.clientId;
+    if (!process.env.GOOGLE_CLIENT_SECRET && sessionData.clientSecret)
+      process.env.GOOGLE_CLIENT_SECRET = sessionData.clientSecret;
+    // Re-read env vars
+    const { GOOGLE_CLIENT_ID: cid, GOOGLE_CLIENT_SECRET: csec } = process.env;
+    if (!cid || !csec) {
+      console.error("❌ 需要 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET");
+      console.error("   请检查 .env 文件中的配置");
+      process.exit(1);
+    }
+    await uploadViaOAuth();
+    return;
+  }
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
     viewport:  { width: 1280, height: 900 },

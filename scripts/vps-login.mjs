@@ -162,11 +162,21 @@ if (!tokens.access_token) {
 
 console.log("✓ access_token 获取成功");
 
-// Save tokens to .env for future use (refresh_token)
+// ── Get user email ────────────────────────────────────────────────────────
+let email = "unknown";
+try {
+  const infoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+  const info = await infoRes.json();
+  email = info.email ?? info.name ?? "unknown";
+  console.log(`✓ 账号：${email}`);
+} catch { /* ignore */ }
+
+// ── Save refresh_token to .env ────────────────────────────────────────────
 if (tokens.refresh_token) {
   const envPath = resolve(ROOT, ".env");
   let envContent = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
-
   if (envContent.includes("GOOGLE_REFRESH_TOKEN=")) {
     envContent = envContent.replace(/^GOOGLE_REFRESH_TOKEN=.*/m, `GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}`);
   } else {
@@ -176,84 +186,15 @@ if (tokens.refresh_token) {
   console.log("✓ refresh_token 已自动写入 .env");
 }
 
-// ── Use access_token to build Playwright session ──────────────────────────
-console.log("\n🌐 正在用 access_token 建立 YouTube Studio session...\n");
-
-const browser = await chromium.launch({
-  headless: true,
-  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-}).catch(e => {
-  console.error("❌ Playwright 启动失败：", e.message);
-  console.error("   运行：node node_modules/playwright/cli.js install-deps chromium");
-  process.exit(1);
-});
-
-const context = await browser.newContext({
-  viewport:  { width: 1280, height: 900 },
-  userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
-  extraHTTPHeaders: { "Authorization": `Bearer ${tokens.access_token}` },
-});
-
-const page = await context.newPage();
-
-// Use token to create Google session via special endpoint
-console.log("  建立 Google 登录 session...");
-await page.goto(
-  `https://accounts.google.com/o/oauth2/v2/auth?` +
-  `client_id=${encodeURIComponent(CLIENT_ID)}` +
-  `&response_type=code&scope=email&redirect_uri=urn:ietf:wg:oauth:2.0:oob` +
-  `&access_token=${tokens.access_token}`,
-  { waitUntil: "domcontentloaded", timeout: 10_000 }
-).catch(() => {});
-
-// Use the token-based session handoff
-await page.goto(
-  `https://accounts.google.com/accounts/OAuthLogin?` +
-  `source=ChromiumBrowser&issuedTo=${encodeURIComponent(CLIENT_ID)}` +
-  `&token=${encodeURIComponent(tokens.access_token)}`,
-  { waitUntil: "domcontentloaded", timeout: 15_000 }
-).catch(() => {});
-
-await page.waitForTimeout(2000);
-
-// Navigate to YouTube Studio
-console.log("  访问 YouTube Studio...");
-await page.goto("https://studio.youtube.com/", {
-  waitUntil: "networkidle",
-  timeout: 20_000,
-}).catch(() => {});
-
-await page.waitForTimeout(2000);
-
-const finalUrl = page.url();
-console.log(`  最终 URL：${finalUrl.substring(0, 70)}`);
-
-// Collect all cookies
-const allCookies = await context.cookies([
-  "https://google.com",
-  "https://accounts.google.com",
-  "https://youtube.com",
-  "https://www.youtube.com",
-  "https://studio.youtube.com",
-]);
-
-const authCookies = allCookies.filter(c =>
-  ["SID", "HSID", "SSID", "SAPISID", "__Secure-1PSID", "__Secure-3PSID"].includes(c.name)
-);
-
-await page.screenshot({ path: resolve(ROOT, "dist/login-result.png") });
-await browser.close();
-
-console.log(`\n  收集到 ${allCookies.length} 个 Cookie，其中认证 Cookie ${authCookies.length} 个`);
-console.log("  截图：dist/login-result.png");
-
-// ── Save session ──────────────────────────────────────────────────────────
+// ── Save session (token-based, no browser cookies needed) ─────────────────
+// upload-banner.mjs mode B will use refresh_token to upload via OAuth API
 const sessionData = {
   createdAt:    new Date().toISOString(),
+  email,
   loginMethod:  "vps-oauth",
-  accessToken:  tokens.access_token,   // for API fallback
-  refreshToken: tokens.refresh_token,  // stored in .env too
-  cookies:      allCookies,
+  accessToken:  tokens.access_token,
+  refreshToken: tokens.refresh_token ?? "",
+  cookies:      [],
 };
 
 writeFileSync(SESSION_FILE, JSON.stringify(sessionData, null, 2));
@@ -263,7 +204,7 @@ console.log(`\n✅ Session 已保存：${SESSION_FILE}`);
 if (process.env.SESSION_ENCRYPTION_KEY) {
   try {
     const { encryptSession } = await import("./encrypt-session.mjs");
-    const enc     = encryptSession(JSON.stringify(sessionData, null, 2));
+    const enc = encryptSession(JSON.stringify(sessionData, null, 2));
     writeFileSync(resolve(SESSION_DIR, "youtube-session.enc"), enc);
     const { unlinkSync } = await import("node:fs");
     unlinkSync(SESSION_FILE);
