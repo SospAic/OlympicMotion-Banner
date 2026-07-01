@@ -98,10 +98,12 @@ async function uploadViaSession(sessionFile) {
   // vps-oauth sessions use refresh_token, not browser cookies
   if (sessionData.loginMethod === "vps-oauth") {
     console.log("  检测到 VPS OAuth Session，使用 token 模式上传");
-    const refreshToken = sessionData.refreshToken
-      || process.env.GOOGLE_REFRESH_TOKEN;
-    if (!refreshToken) {
-      console.error("❌ Session 中没有 refresh_token，请重新运行 vps-login.mjs");
+    // Prefer .env refresh_token over session (session may have stale token)
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
+      || sessionData.refreshToken;
+    if (!refreshToken || refreshToken.includes("你的")) {
+      console.error("❌ 未找到有效 refresh_token");
+      console.error("   请重新运行：node scripts/vps-login.mjs");
       process.exit(1);
     }
     // Temporarily set env vars for uploadViaOAuth

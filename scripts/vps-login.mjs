@@ -268,11 +268,9 @@ try {
 if (tokens.refresh_token) {
   const envPath = resolve(ROOT, ".env");
   let envContent = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
-  if (envContent.includes("GOOGLE_REFRESH_TOKEN=")) {
-    envContent = envContent.replace(/^GOOGLE_REFRESH_TOKEN=.*/m, `GOOGLE_REFRESH_TOKEN=${tokens.refresh_token}`);
-  } else {
-    envContent += `\nGOOGLE_REFRESH_TOKEN=${tokens.refresh_token}\n`;
-  }
+  // Remove any existing line (including commented-out placeholder)
+  envContent = envContent.replace(/^#?\s*GOOGLE_REFRESH_TOKEN=.*$/m, "").replace(/\n{3,}/g, "\n\n");
+  envContent = envContent.trimEnd() + `\nGOOGLE_REFRESH_TOKEN=${tokens.refresh_token}\n`;
   writeFileSync(envPath, envContent);
   console.log("✓ refresh_token 已自动写入 .env");
 }
@@ -290,19 +288,4 @@ const sessionData = {
 
 writeFileSync(SESSION_FILE, JSON.stringify(sessionData, null, 2));
 console.log(`\n✅ Session 已保存：${SESSION_FILE}`);
-
-// Auto-encrypt
-if (process.env.SESSION_ENCRYPTION_KEY) {
-  try {
-    const { encryptSession } = await import("./encrypt-session.mjs");
-    const enc = encryptSession(JSON.stringify(sessionData, null, 2));
-    writeFileSync(resolve(SESSION_DIR, "youtube-session.enc"), enc);
-    const { unlinkSync } = await import("node:fs");
-    unlinkSync(SESSION_FILE);
-    console.log("🔒 Session 已加密，明文已删除");
-  } catch (e) {
-    console.warn("⚠  自动加密失败：", e.message);
-  }
-}
-
 console.log("\n✓ 完成！现在可以运行：node run.mjs\n");
