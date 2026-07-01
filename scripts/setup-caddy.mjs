@@ -81,11 +81,14 @@ const env = loadEnv();
 while (true) {
   let domain = env.DOMAIN ?? "";
 
-  // Always ask — show current value and allow correction
-  if (domain) {
-    console.log(`\n  当前 .env 中的域名：${domain}`);
-    const reuse = (await ask(`  使用此域名？(y/N，输入 n 重新填写)：`));
-    if (!reuse.startsWith("y")) domain = "";
+  // If domain already in .env and looks valid, skip asking
+  const domainLooksValid = /^[a-z0-9][a-z0-9\-]*(\.[a-z0-9\-]+)+$/i.test(domain);
+  if (domain && domainLooksValid) {
+    console.log(`\n  当前域名：\x1b[33m${domain}\x1b[0m`);
+    const reuse = await ask("  使用此域名？(Y/n)：");
+    if (reuse.toLowerCase() === "n") domain = "";
+  } else {
+    domain = "";
   }
 
   if (!domain) {
@@ -195,11 +198,15 @@ ${domain} {
   console.log("  接下来需要在 Google Cloud Console 配置：");
   console.log("══════════════════════════════════════════════\n");
   console.log("1. 打开 https://console.cloud.google.com");
-  console.log("2. API 和服务 → 凭据 → 找到你的 OAuth 客户端 → 编辑");
+  console.log("2. API 和服务 → 凭据");
+  console.log("   → 如果还没有 OAuth 客户端：");
+  console.log("     「创建凭据」→「OAuth 客户端 ID」→ 应用类型选\x1b[33m「Web 应用」\x1b[0m（不是桌面应用！）");
+  console.log("   → 如果已有客户端，点击编辑（铅笔图标）");
   console.log("3. 在「已授权的重定向 URI」中添加：\n");
   console.log(`   \x1b[33m${publicUrl}/oauth/callback\x1b[0m\n`);
-  console.log("4. API 和服务 → OAuth 同意屏幕 → 发布应用（正式版）");
-  console.log("   （发布后 refresh_token 永不过期）\n");
+  console.log("   （同时可保留 http://localhost:8080/callback 用于本地测试）\n");
+  console.log("4. API 和服务 → OAuth 同意屏幕 → 确认发布状态为「正式版」");
+  console.log("   （正式版的 refresh_token 永不过期）\n");
   console.log("5. 完成后重新运行登录：");
   console.log("   node scripts/vps-login.mjs\n");
   console.log("══════════════════════════════════════════════\n");

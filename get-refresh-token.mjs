@@ -1,13 +1,17 @@
 /**
  * 一次性运行脚本：获取 Google OAuth refresh_token
- * 运行后把 refresh_token 存入 GitHub Secrets，然后删除本脚本
  *
- * 用法：
+ * ⚠️  OAuth 客户端类型必须是「Web 应用」，不是「桌面应用」
+ *     已授权的重定向 URI 必须添加：
+ *       - http://localhost:8080/callback （本地测试用）
+ *       - https://你的域名/oauth/callback （VPS 生产用）
+ *
+ * 用法（VPS 上推荐直接用 vps-login.mjs 代替此脚本）：
  *   node get-refresh-token.mjs
  *
- * 需要先设置环境变量（或直接修改下方默认值）：
- *   CLIENT_ID     = 你的 OAuth client_id
- *   CLIENT_SECRET = 你的 OAuth client_secret
+ * 需要先设置环境变量：
+ *   CLIENT_ID     = 你的 OAuth Web 客户端 ID（.apps.googleusercontent.com 结尾）
+ *   CLIENT_SECRET = 你的 OAuth 客户端密钥（GOCSPX- 开头）
  */
 
 import { createServer } from "node:http";
