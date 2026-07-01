@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OlympicMotion Banner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles/banner-static.css">
+</head>
+<body>
+<div class="bs-canvas">
+  <div class="bs-stage">
+
+    <!-- ═══ BACKGROUND ═══ -->
+    <div class="bs-bg" aria-hidden="true">
+      <div class="bs-bg__light bs-bg__light--left"></div>
+      <div class="bs-bg__light bs-bg__light--right"></div>
+      <div class="bs-bg__lines"></div>
+      <div class="bs-bg__grain"></div>
+    </div>
+
+    <!-- ═══ COL 1: BRAND ═══ -->
+    <div class="bs-brand">
+      <div class="bs-logo">
+        <div class="bs-logo__ring"></div>
+        <img class="bs-logo__img" data-logo src="/assets/logo.svg" alt="OlympicMotion">
+      </div>
+      <div class="bs-brand__copy">
+        <h1 class="bs-brand__title">
+          <span class="bs-brand__line1">Olympic</span>
+          <strong class="bs-brand__line2">Motion</strong>
+        </h1>
+        <p class="bs-brand__slogan">Every Play Has A <em>Story</em> —</p>
+      </div>
+    </div>
+
+    <!-- ═══ COL 2: MISSION ═══ -->
+    <div class="bs-mission">
+
+      <!-- kicker -->
+      <div class="bs-kicker">
+        <span class="bs-kicker__arrow">»</span>
+        <span class="bs-kicker__text">Mission</span>
+        <span class="bs-kicker__arrow">«</span>
+      </div>
+
+      <!-- title — "100K" is dynamic -->
+      <h2 class="bs-title">Road To <span class="bs-title__goal" data-mission-goal>100K</span> Champions</h2>
+
+      <!-- stats card -->
+      <div class="bs-card">
+        <!-- big subscriber number -->
+        <div class="bs-subs">
+          <div class="bs-subs__num" data-subs>46,812</div>
+          <div class="bs-subs__label">
+            <span class="bs-subs__dot"></span>
+            Subscribers
+          </div>
+        </div>
+
+        <!-- next goal -->
+        <div class="bs-nextgoal">
+          <div class="bs-nextgoal__label">Next Goal</div>
+          <div class="bs-nextgoal__num" data-next-goal>50K</div>
+          <div class="bs-nextgoal__remaining" data-remaining>3,188 To Go!</div>
+        </div>
+
+        <!-- progress bar + percent -->
+        <div class="bs-progress">
+          <div class="bs-progress__track">
+            <div class="bs-progress__fill" data-progress-fill style="width:46.8%"></div>
+          </div>
+          <div class="bs-progress__meta">
+            <span class="bs-progress__target">Target: <span data-goal>100,000</span></span>
+            <span class="bs-progress__pct" data-percent>46.8%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <a class="bs-cta" href="https://www.youtube.com/" aria-label="Subscribe">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 11h24l12 13-12 13H6l12-13L6 11Zm18 0h7l12 13-12 13h-7l12-13L24 11Z"/></svg>
+        <span>Subscribe &amp; Be Part Of <em>The Journey</em></span>
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M25 42a5 5 0 0 0 5-5H20a5 5 0 0 0 5 5Zm15-12-5-7v-8c0-6-4-11-10-12-6 1-10 6-10 12v8l-5 7v3h30v-3Z"/></svg>
+      </a>
+
+      <!-- feature strip -->
+      <nav class="bs-features" aria-label="Content pillars">
+        <span><svg viewBox="0 0 48 48"><path d="M16 42h16v-5H16v5Zm-7-5h30v-5H9v5Zm7-9h16c8-6 12-13 12-22H31v6h6c-1 5-4 9-8 12H19c-4-3-7-7-8-12h6V6H4c0 9 4 16 12 22Z"/></svg>Epic Moments</span>
+        <span><svg viewBox="0 0 48 48"><path d="M7 13h34v27H7V13Zm0-5h7l4 5h-7L7 8Zm12 0h7l4 5h-7l-4-5Zm12 0h7l4 5h-7l-4-5ZM14 20v13l13-7-13-6Z"/></svg>Untold Stories</span>
+        <span><svg viewBox="0 0 48 48"><path d="m13 5 11 18L35 5h7L29 27a12 12 0 1 1-10 0L6 5h7Zm11 38a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z"/></svg>Olympic Legends</span>
+        <span><svg viewBox="0 0 48 48"><path d="M16 12h4l3-5h8l3 5h5a5 5 0 0 1 5 5v20a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V17a5 5 0 0 1 5-5h7Zm8 25a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-5a5 5 0 1 1 0-10 5 5 0 0 1 0 10Z"/></svg>Behind The Scenes</span>
+        <span><svg viewBox="0 0 48 48"><path d="M10 8h4v5h20V8h4v5h4v29H6V13h4V8Zm28 14H10v16h28V22Zm-23 4h6v5h-6v-5Zm10 0h6v5h-6v-5Z"/></svg>Weekly Uploads</span>
+      </nav>
+    </div>
+
+    <!-- ═══ COL 3: ACHIEVEMENTS ═══ -->
+    <div class="bs-achieve">
+      <div class="bs-achieve__header">
+        <span aria-hidden="true">★ ★</span>
+        <h3>Achievements</h3>
+        <span aria-hidden="true">★</span>
+      </div>
+
+      <!-- badges — dynamically unlocked -->
+      <div class="bs-badges" data-achievements></div>
+
+      <!-- manifesto -->
+      <p class="bs-manifesto">
+        One Channel.<br>
+        One Mission.<br>
+        Millions Of Stories.<br>
+        <strong>Let's Make History Together!</strong>
+      </p>
+
+      <!-- social -->
+      <div class="bs-social">
+        <span class="bs-social__label">Follow &amp; Connect</span>
+        <div class="bs-social__icons" data-social-icons></div>
+      </div>
+    </div>
+
+  </div><!-- /.bs-stage -->
+</div><!-- /.bs-canvas -->
+
+<script type="module" src="/app-static.js"></script>
+</body>
+</html>

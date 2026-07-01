@@ -99,6 +99,17 @@ page.on("requestfailed", r => pageErrors.push("reqfail: " + r.url() + " " + r.fa
 // Navigate — use domcontentloaded first, then wait explicitly
 await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
+// If URL is root, try the static banner page
+const currentUrl = page.url();
+if (!currentUrl.includes("banner-static")) {
+  // Check if banner-static.html exists
+  const staticUrl = TARGET_URL.replace(/\/?$/, "/banner-static.html");
+  const testRes = await fetch(staticUrl).catch(() => null);
+  if (testRes?.ok) {
+    await page.goto(staticUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  }
+}
+
 // Wait for the app.js module to finish painting
 // data-subs is set by app.js after config loads — wait for it to have real content
 try {
