@@ -95,31 +95,72 @@ async function uploadViaSession(sessionFile) {
   console.log(`  Session 创建时间：${sessionData.createdAt}`);
   console.log(`  Cookie 数量：${sessionData.cookies?.length ?? 0}`);
 
-  // vps-oauth sessions use refresh_token, not browser cookies
+  // vps-oauth sessions use refresh_token to get access_token
+  // then use Playwright to establish real browser session for YouTube Studio
   if (sessionData.loginMethod === "vps-oauth") {
-    console.log("  检测到 VPS OAuth Session，使用 token 模式上传");
-    // Prefer .env refresh_token over session (session may have stale token)
-    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
-      || sessionData.refreshToken;
+    console.log("  检测到 VPS OAuth Session，建立浏览器 session 上传");
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN || sessionData.refreshToken;
     if (!refreshToken || refreshToken.includes("你的")) {
-      console.error("❌ 未找到有效 refresh_token");
-      console.error("   请重新运行：node scripts/vps-login.mjs");
+      console.error("❌ 未找到有效 refresh_token，请重新运行：node scripts/vps-login.mjs");
       process.exit(1);
     }
-    // Temporarily set env vars for uploadViaOAuth
-    process.env.GOOGLE_REFRESH_TOKEN = refreshToken;
-    if (!process.env.GOOGLE_CLIENT_ID && sessionData.clientId)
-      process.env.GOOGLE_CLIENT_ID = sessionData.clientId;
-    if (!process.env.GOOGLE_CLIENT_SECRET && sessionData.clientSecret)
-      process.env.GOOGLE_CLIENT_SECRET = sessionData.clientSecret;
-    // Re-read env vars
-    const { GOOGLE_CLIENT_ID: cid, GOOGLE_CLIENT_SECRET: csec } = process.env;
-    if (!cid || !csec) {
-      console.error("❌ 需要 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET");
-      console.error("   请检查 .env 文件中的配置");
+
+    // Get fresh access_token
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId, client_secret: clientSecret,
+        refresh_token: refreshToken, grant_type: "refresh_token",
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      console.error("❌ access_token 获取失败：", JSON.stringify(tokenData));
       process.exit(1);
     }
-    await uploadViaOAuth();
+    const accessToken = tokenData.access_token;
+    console.log("  ✓ access_token 获取成功");
+
+    // Use Google OAuthLogin to convert access_token to browser session
+    const browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+    });
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
+    });
+    const page = await context.newPage();
+
+    console.log("  🔐 正在通过 token 建立 Google 登录 session...");
+    // Use Google's token-based login endpoint
+    await page.goto(
+      `https://accounts.google.com/accounts/OAuthLogin?source=ogb&issuedTo=${encodeURIComponent(clientId)}&token=${encodeURIComponent(accessToken)}`,
+      { waitUntil: "domcontentloaded", timeout: 15_000 }
+    ).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    // Navigate to YouTube Studio
+    await page.goto("https://studio.youtube.com/channel/default/customization/branding", {
+      waitUntil: "networkidle", timeout: 20_000,
+    }).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    const url = page.url();
+    console.log("  当前 URL：", url.substring(0, 80));
+
+    if (url.includes("accounts.google.com")) {
+      await page.screenshot({ path: BANNER_FILE.replace(".png", "-debug-login.png") });
+      await browser.close();
+      console.error("❌ 浏览器 session 建立失败，被重定向到登录页");
+      console.error("   调试截图：dist/banner-debug-login.png");
+      process.exit(1);
+    }
+
+    await _performUpload(page, browser);
     return;
   }
 
