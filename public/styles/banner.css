@@ -139,17 +139,17 @@
 
 .brand-panel {
   display: grid;
-  grid-template-columns: clamp(80px, 8.5vw, 140px) minmax(0, 1fr);
+  grid-template-columns: clamp(72px, 7.8vw, 122px) minmax(0, 1fr);
   align-items: center;
   align-content: center;
   min-width: 0;
   overflow: hidden;
-  padding-left: 1%;
-  gap: 0 clamp(6px, 0.8vw, 14px);
+  padding-left: 1.2%;
+  gap: 0 clamp(5px, 0.7vw, 12px);
 }
 
 .logo-orbit {
-  width: clamp(88px, 9.2vw, 156px);
+  width: clamp(70px, 7.6vw, 118px);
   aspect-ratio: 1;
   position: relative;
   display: grid;
@@ -160,7 +160,7 @@
 .logo-ring {
   position: absolute;
   inset: 0;
-  border: clamp(4px, 0.45vw, 8px) solid var(--gold-100);
+  border: clamp(3px, 0.38vw, 6px) solid var(--gold-100);
   border-radius: 50%;
   background: rgba(0,0,0,.70);
   animation: ringPulse 3.8s ease-in-out infinite;
@@ -170,19 +170,19 @@
 .logo-ring::after {
   content: "";
   position: absolute;
-  inset: clamp(-8px, -1vw, -14px);
+  inset: clamp(-6px, -0.8vw, -12px);
   border-radius: inherit;
   border: 1.5px solid rgba(255,197,55,.30);
 }
 
 .logo-ring::after {
-  inset: clamp(-12px, -1.5vw, -22px);
+  inset: clamp(-10px, -1.2vw, -18px);
   border-color: rgba(255,255,255,.14);
   clip-path: polygon(0 0, 52% 0, 40% 100%, 0 100%);
 }
 
 .logo-img {
-  width: clamp(68px, 7.2vw, 120px);
+  width: clamp(54px, 6.0vw, 94px);
   aspect-ratio: 1;
   border-radius: 50%;
   position: relative;
@@ -203,8 +203,10 @@
   font-style: italic;
   line-height: .88;
   letter-spacing: -0.5px;
-  font-size: clamp(20px, 3.8vw, 60px);
+  font-size: clamp(18px, 3.2vw, 50px);
   text-shadow: 0 8px 24px rgba(0,0,0,.9);
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .brand-copy h1 span,
@@ -227,21 +229,27 @@
 }
 
 .brand-copy p {
-  margin: clamp(4px, 0.6vw, 10px) 0 0;
-  color: #fff;
-  font: italic 800 clamp(9px, 1.15vw, 18px)/1 var(--font-display);
+  margin: clamp(3px, 0.4vw, 7px) 0 0;
+  color: rgba(255,255,255,.90);
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 700;
+  font-size: clamp(8px, 1.0vw, 15px);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  line-height: 1;
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .brand-copy p::before {
   content: "";
   display: inline-block;
-  width: 24px;
-  height: 2px;
+  width: clamp(12px, 1.5vw, 22px);
+  height: 1.5px;
   background: var(--gold-200);
   flex-shrink: 0;
 }
@@ -249,14 +257,15 @@
 .brand-copy p::after {
   content: "";
   display: inline-block;
-  width: 24px;
-  height: 2px;
+  width: clamp(12px, 1.5vw, 22px);
+  height: 1.5px;
   background: var(--gold-200);
   flex-shrink: 0;
 }
 
 .brand-copy p em {
   font-style: italic;
+  font-family: var(--font-display);
   color: var(--gold-200);
 }
 
@@ -611,9 +620,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: clamp(3px, 0.4vw, 7px);
-  padding-top: 0.2%;
+  justify-content: flex-end;
+  gap: clamp(3px, 0.35vw, 6px);
+  padding-bottom: clamp(2px, 0.3vw, 5px);
 }
 }
 
