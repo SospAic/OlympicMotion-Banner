@@ -121,9 +121,9 @@
   z-index: 2;
   display: grid;
   grid-template-columns: 29% 38% 33%;
-  grid-template-rows: 1fr clamp(30px, 3.5vw, 52px);
+  grid-template-rows: 1fr clamp(28px, 3.2vw, 48px);
   gap: 0 0.8%;
-  padding: 1.2% 0.6% 0.5%;
+  padding: 0.6% 0.5% 0.4%;
   overflow: hidden;
 }
 
@@ -138,13 +138,13 @@
 }
 
 .brand-panel {
-  display: grid;
-  grid-template-columns: clamp(90px, 9.5vw, 160px) minmax(0, 1fr);
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  align-content: center;
   min-width: 0;
   overflow: hidden;
   padding-left: 0.5%;
+  gap: clamp(6px, 0.7vw, 14px);
 }
 
 .logo-orbit {
@@ -266,7 +266,7 @@
   display: flex;
   flex-direction: column;
   padding-top: 0;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 0;
 }
 
@@ -517,6 +517,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  justify-content: space-between;
 }
 
 .achievement-title {
@@ -657,13 +658,13 @@
 .manifesto  { display: none; }
 
 .feature-strip {
-  grid-column: 2 / 3;
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
   gap: clamp(3px, 0.4vw, 8px);
   min-width: 0;
-  padding: 0.2% 0;
+  padding: 0 0.3%;
 }
 
 .feature-strip span {
@@ -695,9 +696,9 @@
   .safe-area {
     grid-template-columns: 30% 38% 32%;
     gap: 0 0.8%;
-    padding: 1.2% 0.7% 0.8%;
+    padding: 0.6% 0.5% 0.4%;
   }
-  .brand-panel { grid-template-columns: clamp(80px, 8.5vw, 140px) 1fr; }
+  .brand-panel { gap: clamp(4px, 0.5vw, 10px); }
   .achievement-panel { padding: 0.8% 0.6%; }
   .manifesto { display: none; }
   .social-row { display: none; }
@@ -706,11 +707,11 @@
 @media (max-width: 900px) {
   .safe-area {
     grid-template-columns: 30% 38% 32%;
-    padding: 1% 0.5% 0.6%;
+    padding: 0.5% 0.4% 0.3%;
     gap: 0 0.5%;
   }
   .subscriber-card { grid-template-columns: 1fr clamp(60px, 7.5vw, 110px); }
   .achievement-panel { align-self: stretch; }
-  .feature-strip { grid-column: 2 / 3; }
+  .feature-strip { grid-column: 1 / -1; }
   .manifesto, .social-row { display: none; }
 }
