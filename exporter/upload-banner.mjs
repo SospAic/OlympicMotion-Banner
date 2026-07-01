@@ -443,6 +443,23 @@ async function uploadViaOAuth() {
   console.log("  频道 ID：", channelId);
   console.log("  Banner URL：", bannerUrl);
 
+  // First GET current brandingSettings to avoid "Required" error
+  const currentRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=brandingSettings&id=${channelId}`,
+    { headers: { "Authorization": `Bearer ${ACCESS_TOKEN}` } }
+  );
+  const currentData = await currentRes.json();
+  const currentBranding = currentData.items?.[0]?.brandingSettings ?? {};
+
+  // Merge: keep existing settings, only update bannerExternalUrl
+  const updatedBranding = {
+    ...currentBranding,
+    image: {
+      ...(currentBranding.image ?? {}),
+      bannerExternalUrl: bannerUrl,
+    },
+  };
+
   const applyRes = await fetch(
     "https://www.googleapis.com/youtube/v3/channels?part=brandingSettings",
     {
@@ -453,9 +470,7 @@ async function uploadViaOAuth() {
       },
       body: JSON.stringify({
         id: channelId,
-        brandingSettings: {
-          image: { bannerExternalUrl: bannerUrl },
-        },
+        brandingSettings: updatedBranding,
       }),
     }
   );

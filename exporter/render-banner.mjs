@@ -113,11 +113,31 @@ try {
   throw new Error("app.js did not finish painting within 15s — see debug screenshot");
 }
 
-// Extra wait for CSS animations, font rendering and badge pop-in animations
-// badgePop animation is 0.5s with delays up to 65ms * 6 = ~0.9s total
-// numFlash animation is 1.2s
-// ringPulse, goldSweep etc need to complete at least one cycle
-await page.waitForTimeout(3000);
+// ── Wait for all visual elements to fully render ──────────────────────────
+
+// 1. Wait for web fonts to load (Barlow Condensed)
+await page.evaluate(() => document.fonts.ready);
+
+// 2. Wait for all 7 badges to appear in DOM
+await page.waitForFunction(
+  () => document.querySelectorAll(".badge").length >= 7,
+  { timeout: 10_000 }
+).catch(() => console.warn("⚠  badges not all rendered, continuing anyway"));
+
+// 3. Wait for progress bar transition to complete (1.2s transition)
+await page.waitForFunction(
+  () => {
+    const fill = document.querySelector("[data-progress-fill],.sub-progress-fill");
+    if (!fill) return true;
+    const w = getComputedStyle(fill).width;
+    return w !== "0px";
+  },
+  { timeout: 5_000 }
+).catch(() => {});
+
+// 4. Final wait for CSS animations (goldSweep 5.4s, ringPulse 3.8s — capture mid-animation)
+// We want at least one full cycle of the shortest animation (barSpark 2.4s)
+await page.waitForTimeout(4000);
 
 if (pageErrors.length) {
   console.warn("Non-fatal page errors:", pageErrors);
