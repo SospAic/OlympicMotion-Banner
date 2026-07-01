@@ -103,7 +103,46 @@ if (EXISTING_RT) {
     });
     const testData = await testRes.json();
     if (testData.access_token) {
-      console.log("✓ refresh_token 仍然有效，无需重新授权（避免触发 Grant Limit）");
+      // Verify this is the correct YouTube channel account
+      let email = "unknown";
+      let channelTitle = "";
+      try {
+        const i = await (await fetch("https://www.googleapis.com/oauth2/v2/userinfo",
+          { headers: { Authorization: `Bearer ${testData.access_token}` } })).json();
+        email = i.email ?? "unknown";
+      } catch { /* ignore */ }
+      try {
+        const ch = await (await fetch(
+          "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
+          { headers: { Authorization: `Bearer ${testData.access_token}` } }
+        )).json();
+        channelTitle = ch.items?.[0]?.snippet?.title ?? "（未找到 YouTube 频道）";
+      } catch { /* ignore */ }
+
+      console.log(`✓ 账号：${email}`);
+      console.log(`  YouTube 频道：${channelTitle}`);
+
+      if (!channelTitle || channelTitle.includes("未找到")) {
+        console.warn("\n⚠  此账号没有 YouTube 频道，无法上传 Banner");
+        console.warn("  请用有 YouTube 频道的运营账号重新授权");
+        console.warn("  输入 n 重新授权，或 Enter 继续（用于仅生成 banner 不上传）");
+        const { createInterface } = await import("node:readline");
+        const ans = await new Promise(r => {
+          const rl = createInterface({ input: process.stdin, output: process.stdout });
+          rl.question("  继续使用此账号？(Y/n)：", a => { rl.close(); r(a.trim().replace(/\r/g,"")); });
+        });
+        if (ans.toLowerCase() === "n") {
+          console.log("  跳过 token 复用，进入重新授权流程...\n");
+          // Fall through to re-authorize
+        } else {
+          console.log("  继续（注意：上传功能不可用）");
+          // Still save session for banner generation
+        }
+      }
+
+      if (channelTitle && !channelTitle.includes("未找到")) {
+        console.log("✓ refresh_token 仍然有效，无需重新授权（避免触发 Grant Limit）");
+      }
       let email = "unknown";
       try {
         const i = await (await fetch("https://www.googleapis.com/oauth2/v2/userinfo",
@@ -119,13 +158,6 @@ if (EXISTING_RT) {
       };
       const sFile = resolve(SESSION_DIR, "youtube-session.json");
       writeFileSync(sFile, JSON.stringify(sessionData, null, 2));
-      if (process.env.SESSION_ENCRYPTION_KEY) {
-        const { encryptSession } = await import("./encrypt-session.mjs");
-        writeFileSync(resolve(SESSION_DIR, "youtube-session.enc"),
-          encryptSession(JSON.stringify(sessionData, null, 2)));
-        unlinkSync(sFile);
-        console.log("🔒 Session 已加密保存");
-      }
       console.log(`✅ Session 已更新（账号：${email}）\n✓ 现在可以运行：node run.mjs\n`);
       process.exit(0);
     }
