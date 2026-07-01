@@ -1,11 +1,11 @@
-/**
- * Banner Designer — Layer 1 glue script
- * Loads config → calls Runtime → paints DOM.
+﻿/**
+ * Banner Designer 鈥?Layer 1 glue script
+ * Loads config 鈫?calls Runtime 鈫?paints DOM.
  * Never touches YouTube API directly.
  */
 import { computeBannerState } from "/runtime/banner-runtime.js";
 
-// ── Fallback config (used if JSON fetch fails) ────────────────────────────
+// 鈹€鈹€ Fallback config (used if JSON fetch fails) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 const DEFAULTS = {
   brand: {
     channelName: "OlympicMotion",
@@ -51,7 +51,7 @@ const DEFAULTS = {
   showProgressPercent: false,
 };
 
-// ── Config loader ─────────────────────────────────────────────────────────
+// 鈹€鈹€ Config loader 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 async function loadConfig() {
   // Allow inline override via ?data=<url-encoded-json>
   const params = new URLSearchParams(location.search);
@@ -79,7 +79,7 @@ function deepMerge(base, over) {
   return out;
 }
 
-// ── DOM helpers ───────────────────────────────────────────────────────────
+// 鈹€鈹€ DOM helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 function setText(sel, text) {
   const el = document.querySelector(sel);
   if (el) el.textContent = text;
@@ -102,7 +102,7 @@ function escHtml(str) {
     .replace(/>/g, "&gt;");
 }
 
-// ── Social icons factory ──────────────────────────────────────────────────
+// 鈹€鈹€ Social icons factory 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 const SOCIAL_SVGS = {
   youtube:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-1.3C16.1 2.8 12 2.8 12 2.8s-4.1 0-6.8.2c-.6.1-1.9.1-3 1.3C1.3 5 1 7 1 7S.7 9.1.7 11.2v2c0 2.1.3 4.2.3 4.2S1.3 19.6 2.2 20.4c1.1 1.2 2.6 1.1 3.3 1.2C7.6 21.8 12 21.8 12 21.8s4.1 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.1.3-4.2v-2C23.3 9.1 23 7 23 7zm-13.5 8.5V8.8l8 3.4-8 3.3z"/></svg>`,
   instagram: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2c3.2 0 3.6 0 4.9.1 3.3.2 4.8 1.7 5 5 .1 1.3.1 1.6.1 4.8 0 3.2 0 3.6-.1 4.8-.2 3.3-1.7 4.8-5 5-1.3.1-1.6.1-4.9.1-3.2 0-3.6 0-4.8-.1-3.3-.2-4.8-1.7-5-5C2.1 15.7 2 15.3 2 12c0-3.2 0-3.6.1-4.8.2-3.3 1.7-4.8 5-5C8.4 2.1 8.8 2.2 12 2.2zm0 1.8c-3.2 0-3.5 0-4.8.1-2.3.1-3.3 1.2-3.5 3.5-.1 1.2-.1 1.6-.1 4.7s0 3.5.1 4.7c.1 2.3 1.2 3.3 3.5 3.5 1.2.1 1.5.1 4.8.1s3.5 0 4.8-.1c2.3-.1 3.3-1.2 3.5-3.5.1-1.2.1-1.5.1-4.7s0-3.5-.1-4.7c-.1-2.3-1.2-3.3-3.5-3.5C15.5 4 15.2 4 12 4zm0 3a5 5 0 1 1 0 10A5 5 0 0 1 12 7zm0 1.8a3.2 3.2 0 1 0 0 6.5 3.2 3.2 0 0 0 0-6.5zM17.2 6a1.2 1.2 0 1 1 0 2.4A1.2 1.2 0 0 1 17.2 6z"/></svg>`,
@@ -156,12 +156,12 @@ function makeBadge(item, i) {
   return el;
 }
 
-// ── Scale safe-area to fit viewport (kept for backward compat) ───────────
+// 鈹€鈹€ Scale safe-area to fit viewport (kept for backward compat) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 function updateScale() {
-  // safe-area now uses 100% width — no transform needed
+  // safe-area now uses 100% width 鈥?no transform needed
 }
 
-// ── Main paint function ───────────────────────────────────────────────────
+// 鈹€鈹€ Main paint function 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 function paint(cfg) {
   const state = computeBannerState(cfg);
 
@@ -180,7 +180,7 @@ function paint(cfg) {
   setText("[data-brand-line1]", cfg.brand.brandLine1);
   setText("[data-brand-line2]", cfg.brand.brandLine2);
 
-  // Slogan — accent word highlighted
+  // Slogan 鈥?accent word highlighted
   const sloganEl = document.querySelector("[data-slogan]");
   if (sloganEl) {
     const text   = cfg.brand.slogan  ?? "Every Play Has A Story";
@@ -207,10 +207,8 @@ function paint(cfg) {
   setText("[data-next-goal]",        state.formatted.nextGoal);
   setText("[data-remaining]",        state.formatted.toNext);
   setText("[data-cta]",              cfg.mission.cta);
-  setText("[data-percent]",          state.formatted.percent);
-  setText("[data-goal]",             state.formatted.goal);
 
-  // Progress bar — uses pctToNext (progress within current segment, not overall)
+  // Progress bar 鈥?uses pctToNext (progress within current segment, not overall)
   const fill = document.querySelector("[data-progress-fill]");
   if (fill) {
     fill.style.width = "0%";
@@ -233,6 +231,6 @@ function paint(cfg) {
   updateScale();
 }
 
-// ── Boot ──────────────────────────────────────────────────────────────────
+// 鈹€鈹€ Boot 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 window.addEventListener("resize", updateScale, { passive: true });
 loadConfig().then(paint);
