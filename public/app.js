@@ -207,6 +207,8 @@ function paint(cfg) {
   setText("[data-next-goal]",        state.formatted.nextGoal);
   setText("[data-remaining]",        state.formatted.toNext);
   setText("[data-cta]",              cfg.mission.cta);
+  setText("[data-percent]",          state.formatted.percent);
+  setText("[data-goal]",             state.formatted.goal);
 
   // Progress bar — uses pctToNext (progress within current segment, not overall)
   const fill = document.querySelector("[data-progress-fill]");

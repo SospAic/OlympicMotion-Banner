@@ -47,16 +47,18 @@
             <h2 data-mission-title>Road To <span>1M</span> Champions</h2>
 
             <div class="subscriber-card hud-panel">
-              <!-- Progress bar fills the card, number floats inside it -->
               <div class="sub-progress-wrap">
+                <!-- Big subscriber number above the bar -->
+                <div class="sub-number-row">
+                  <strong data-subs>00,000</strong>
+                  <span data-subscribers-label>Subscribers</span>
+                </div>
+                <!-- Gold progress bar with percentage inside -->
                 <div class="sub-progress-track">
                   <div class="sub-progress-fill" data-progress-fill></div>
-                  <!-- Number centered over the bar -->
-                  <div class="sub-progress-label">
-                    <strong data-subs>00,000</strong>
-                    <span data-subscribers-label>Subscribers</span>
-                  </div>
+                  <b data-percent class="sub-pct">0%</b>
                 </div>
+                <small class="sub-target">Target: <span data-goal>1,000,000</span></small>
               </div>
               <!-- Right: next goal info -->
               <div class="next-goal">
