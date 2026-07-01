@@ -159,8 +159,9 @@ async function renderBanner(serverUrl) {
   const { mkdirSync } = await import("node:fs");
   mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 
-  // Delegate to exporter/render-banner.mjs which saves both
-  // dist/banner.png (2560×423 preview) and dist/banner-full.png (2560×1440 upload)
+  // Wait extra second after server is confirmed ready before screenshotting
+  await new Promise(r => setTimeout(r, 1500));
+
   await new Promise((res, rej) => {
     const proc = spawn(process.execPath, ["exporter/render-banner.mjs", "dist/banner.png"], {
       cwd: ROOT,
