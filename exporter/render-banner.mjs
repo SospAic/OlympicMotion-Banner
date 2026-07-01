@@ -113,8 +113,11 @@ try {
   throw new Error("app.js did not finish painting within 15s — see debug screenshot");
 }
 
-// Extra wait for CSS animations and font rendering
-await page.waitForTimeout(1000);
+// Extra wait for CSS animations, font rendering and badge pop-in animations
+// badgePop animation is 0.5s with delays up to 65ms * 6 = ~0.9s total
+// numFlash animation is 1.2s
+// ringPulse, goldSweep etc need to complete at least one cycle
+await page.waitForTimeout(3000);
 
 if (pageErrors.length) {
   console.warn("Non-fatal page errors:", pageErrors);
@@ -132,6 +135,32 @@ if (count === 0) {
 }
 
 // Save full 2560×1440 for YouTube upload (requires 16:9, min 2048×1152)
+// Inject style to make banner fill the full viewport for the upload screenshot
+await page.addStyleTag({ content: `
+  body {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 1440px !important;
+    background: #000 !important;
+  }
+  .youtube-canvas {
+    width: 2560px !important;
+    height: 1440px !important;
+    aspect-ratio: unset !important;
+  }
+  .banner-stage {
+    /* Keep banner-stage centered in the 1440px tall canvas */
+    position: absolute !important;
+    top: 50% !important;
+    left: 0 !important;
+    transform: translateY(-50%) !important;
+    width: 2560px !important;
+    height: 423px !important;
+  }
+` });
+await page.waitForTimeout(200);
+
 const fullOutput = OUTPUT.replace(".png", "-full.png");
 await page.screenshot({ path: fullOutput, fullPage: false });
 
