@@ -47,39 +47,50 @@ const meta = await sharp(BG).metadata();
 const BW = meta.width  ?? 1983;
 const BH = meta.height ?? 793;
 
-// ── COORDINATE MAP (1983×793) — verified from annotated screenshot ───────
-// Green box = progress bar track
+// ── Load layout from config ───────────────────────────────────────────────
+const layout = CONFIG.v2Layout ?? {};
+const PBcfg  = layout.progressBar  ?? {};
+const NGcfg  = layout.toGoBox      ?? {};
+const BRcfg  = layout.badgeRow     ?? {};
+
+// Progress bar
 const PB = {
-  x: 537,   // left edge
-  y: 373,   // top edge
-  w: 412,   // width
-  h: 54,    // height
-  r: 8,
+  x: PBcfg.x ?? 537,
+  y: PBcfg.y ?? 373,
+  w: PBcfg.w ?? 412,
+  h: PBcfg.h ?? 54,
+  r: PBcfg.cornerRadius ?? 8,
+  numOX: PBcfg.subsNumber?.offsetX ?? 0.5,
+  numOY: PBcfg.subsNumber?.offsetY ?? 0.72,
+  numFS: PBcfg.subsNumber?.fontSize ?? 34,
 };
 
-// Blue box = "TO GO!" number area (next-goal distance)
+// To Go box
 const NG = {
-  x: 963,   // left edge
-  y: 360,   // top edge
-  w: 148,   // width
-  h: 85,    // height
+  x:   NGcfg.x ?? 963,
+  y:   NGcfg.y ?? 360,
+  w:   NGcfg.w ?? 148,
+  h:   NGcfg.h ?? 85,
+  oX:  NGcfg.numberOffsetX ?? 0.5,
+  oY:  NGcfg.numberOffsetY ?? 0.52,
+  fs:  NGcfg.fontSize ?? 32,
 };
 
-// Red box = achievements badge row
-// 7 badges, row starts at x≈712, width≈1175
+// Badge row
 const BADGE_ROW = {
-  x0:    796,    // center of first badge (712 + 1175/7/2 ≈ 796)
-  y:      162,   // vertical center (y=115 + 95/2)
-  step:   168,   // 1175/7
-  size:    50,
-  labelY: 208,
-  captY:  223,
+  x0:     BRcfg.x0      ?? 796,
+  y:      BRcfg.y       ?? 162,
+  step:   BRcfg.step    ?? 168,
+  size:   BRcfg.size    ?? 50,
+  labelY: BRcfg.labelY  ?? 208,
+  captY:  BRcfg.captionY ?? 223,
+  lblFS:  BRcfg.labelFontSize   ?? 13,
+  capFS:  BRcfg.captionFontSize ?? 9,
 };
 
 // ── Build SVG overlay ─────────────────────────────────────────────────────
 const fillW = Math.round(PB.w * pctToNext / 100);
 
-// Badge SVG helper
 const badges = CONFIG.achievements ?? [];
 function badgeSVG(b, i) {
   const unlocked = subs >= Number(b.threshold);
@@ -98,9 +109,9 @@ function badgeSVG(b, i) {
         fill="none" stroke="#1a1200" stroke-width="${sz*0.10}" stroke-linecap="round" stroke-linejoin="round"/>
       <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
         font-family="Arial Black,Impact,sans-serif" font-weight="900"
-        font-size="13" fill="#ffc94a">${b.label}</text>
+        font-size="${BADGE_ROW.lblFS}" fill="#ffc94a">${b.label}</text>
       <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
-        font-family="Arial,sans-serif" font-size="9" fill="rgba(255,255,255,0.70)">SUBSCRIBERS</text>
+        font-family="Arial,sans-serif" font-size="${BADGE_ROW.capFS}" fill="rgba(255,255,255,0.70)">SUBSCRIBERS</text>
     </g>`;
   } else {
     // Locked — dim shield with padlock
@@ -113,9 +124,9 @@ function badgeSVG(b, i) {
         fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
       <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
         font-family="Arial Black,Impact,sans-serif" font-weight="900"
-        font-size="13" fill="rgba(255,201,74,0.55)">${b.label}</text>
+        font-size="${BADGE_ROW.lblFS}" fill="rgba(255,201,74,0.55)">${b.label}</text>
       <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
-        font-family="Arial,sans-serif" font-size="9" fill="rgba(255,255,255,0.40)">SUBSCRIBERS</text>
+        font-family="Arial,sans-serif" font-size="${BADGE_ROW.capFS}" fill="rgba(255,255,255,0.40)">SUBSCRIBERS</text>
     </g>`;
   }
 }
@@ -156,17 +167,17 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BW}" height="${BH}
 </g>
 
 <!-- ── SUBSCRIBER NUMBER centered in progress bar ── -->
-<text x="${PB.x + PB.w * 0.5}" y="${PB.y + PB.h * 0.72}"
+<text x="${PB.x + PB.w * PB.numOX}" y="${PB.y + PB.h * PB.numOY}"
   text-anchor="middle"
   font-family="Arial Black,Impact,sans-serif" font-weight="900"
-  font-size="34" fill="white" filter="url(#shadow)"
+  font-size="${PB.numFS}" fill="white" filter="url(#shadow)"
   letter-spacing="-1">${fmtPlain(subs)}</text>
 
 <!-- ── TO GO number in blue box area ── -->
-<text x="${NG.x + NG.w * 0.5}" y="${NG.y + NG.h * 0.52}"
+<text x="${NG.x + NG.w * NG.oX}" y="${NG.y + NG.h * NG.oY}"
   text-anchor="middle"
   font-family="Arial Black,Impact,sans-serif" font-weight="900"
-  font-size="32" fill="url(#gld)" filter="url(#glow)">${fmtPlain(toGo)}</text>
+  font-size="${NG.fs}" fill="url(#gld)" filter="url(#glow)">${fmtPlain(toGo)}</text>
 
 <!-- ── BADGES ── -->
 ${badges.map(badgeSVG).join("\n")}

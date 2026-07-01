@@ -17,7 +17,46 @@
     "targetLabel": "Target"
   },
   "data": {
-    "subs": 57
+    "subs": 84
+  },
+  "v2Layout": {
+    "_comment": "background.png 原始尺寸 1983x793，所有坐标基于此尺寸",
+    "_tip": "修改后运行: node exporter/render-banner-v2.mjs 查看效果",
+    "progressBar": {
+      "_comment": "绿色框 — 进度条轨道，金色填充表示当前订阅数完成百分比",
+      "x": 537,
+      "y": 373,
+      "w": 412,
+      "h": 54,
+      "cornerRadius": 8,
+      "subsNumber": {
+        "_comment": "订阅数显示在进度条正中央，offsetX/Y 是相对进度条宽高的比例 0~1",
+        "offsetX": 0.5,
+        "offsetY": 0.72,
+        "fontSize": 34
+      }
+    },
+    "toGoBox": {
+      "_comment": "蓝色框 — 当前订阅数距离最近档位还差多少",
+      "x": 963,
+      "y": 360,
+      "w": 148,
+      "h": 85,
+      "numberOffsetX": 0.5,
+      "numberOffsetY": 0.52,
+      "fontSize": 32
+    },
+    "badgeRow": {
+      "_comment": "红色框 — 7个成就徽章，x0是第一个徽章中心x坐标，step是相邻徽章间距",
+      "x0": 796,
+      "y": 162,
+      "step": 168,
+      "size": 50,
+      "labelY": 208,
+      "captionY": 223,
+      "labelFontSize": 13,
+      "captionFontSize": 9
+    }
   },
   "social": {
     "youtube": "https://youtube.com/@OlympicMotion",
@@ -26,63 +65,20 @@
     "x": "https://x.com/OlympicMotion"
   },
   "features": [
-    {
-      "icon": "trophy",
-      "label": "Epic Moments"
-    },
-    {
-      "icon": "film",
-      "label": "Untold Stories"
-    },
-    {
-      "icon": "medal",
-      "label": "Olympic Legends"
-    },
-    {
-      "icon": "camera",
-      "label": "Behind The Scenes"
-    },
-    {
-      "icon": "calendar",
-      "label": "Weekly Uploads"
-    }
+    { "icon": "trophy",   "label": "Epic Moments" },
+    { "icon": "film",     "label": "Untold Stories" },
+    { "icon": "medal",    "label": "Olympic Legends" },
+    { "icon": "camera",   "label": "Behind The Scenes" },
+    { "icon": "calendar", "label": "Weekly Uploads" }
   ],
   "achievements": [
-    {
-      "label": "100",
-      "caption": "Subscribers",
-      "threshold": 100
-    },
-    {
-      "label": "1K",
-      "caption": "Subscribers",
-      "threshold": 1000
-    },
-    {
-      "label": "10K",
-      "caption": "Subscribers",
-      "threshold": 10000
-    },
-    {
-      "label": "50K",
-      "caption": "Subscribers",
-      "threshold": 50000
-    },
-    {
-      "label": "100K",
-      "caption": "Subscribers",
-      "threshold": 100000
-    },
-    {
-      "label": "500K",
-      "caption": "Subscribers",
-      "threshold": 500000
-    },
-    {
-      "label": "1M",
-      "caption": "Subscribers",
-      "threshold": 1000000
-    }
+    { "label": "100",  "caption": "Subscribers", "threshold": 100 },
+    { "label": "1K",   "caption": "Subscribers", "threshold": 1000 },
+    { "label": "10K",  "caption": "Subscribers", "threshold": 10000 },
+    { "label": "50K",  "caption": "Subscribers", "threshold": 50000 },
+    { "label": "100K", "caption": "Subscribers", "threshold": 100000 },
+    { "label": "500K", "caption": "Subscribers", "threshold": 500000 },
+    { "label": "1M",   "caption": "Subscribers", "threshold": 1000000 }
   ],
   "theme": "gold",
   "showSafeArea": false,
