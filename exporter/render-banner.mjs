@@ -78,10 +78,15 @@ if (!process.env.BANNER_URL) {
 
 // ── Screenshot ────────────────────────────────────────────────────────────
 const browser = await chromium.launch({ headless: true });
-// Use 1152×648 viewport to match the user's actual browser innerWidth
-// This ensures all vw/clamp CSS values produce identical results to the browser
-const page    = await browser.newPage({
-  viewport:          { width: 1152, height: 648 },
+
+// Strategy: use 1546×423 viewport — exactly the YouTube safe-area dimensions.
+// This forces banner-stage to fill the entire viewport with no scaling artifacts.
+// All vw units resolve against 1546px which produces correct visual proportions.
+const SAFE_W = 1546;
+const SAFE_H = 423;
+
+const page = await browser.newPage({
+  viewport:          { width: SAFE_W, height: SAFE_H },
   deviceScaleFactor: 1,
 });
 
@@ -136,42 +141,63 @@ if (count === 0) {
   throw new Error(".banner-stage not found — check debug screenshot");
 }
 
-// Step 1: Screenshot the banner stage at current viewport (matches browser visual)
-await stage.screenshot({ path: OUTPUT });
-console.log(`✓ Banner preview → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
+// Inject CSS to make safe-area fill the viewport exactly, no transforms
+await page.addStyleTag({ content: `
+  body, html { margin:0; padding:0; overflow:hidden; background:#000; }
+  .youtube-canvas {
+    width: ${SAFE_W}px !important;
+    height: ${SAFE_H}px !important;
+    min-height: unset !important;
+    aspect-ratio: unset !important;
+  }
+  .banner-stage {
+    width: ${SAFE_W}px !important;
+    height: ${SAFE_H}px !important;
+    max-height: unset !important;
+  }
+  .safe-area {
+    width: ${SAFE_W}px !important;
+    height: ${SAFE_H}px !important;
+    transform: none !important;
+  }
+` });
+await page.waitForTimeout(500);
 
-// Step 2: Create 2560×1440 full image for YouTube upload
-// YouTube needs 16:9 min 2048×1152; we place the banner centered on black canvas
+// Step 1: Screenshot the banner at safe-area dimensions (pixel-perfect)
+await page.screenshot({ path: OUTPUT, fullPage: false, clip: { x:0, y:0, width:SAFE_W, height:SAFE_H } });
+console.log(`✓ Banner preview (${SAFE_W}×${SAFE_H}) → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
+
+// Step 2: Resize viewport to 2560×1440 and place banner centered for YouTube upload
+await page.setViewportSize({ width: 2560, height: 1440 });
+await page.addStyleTag({ content: `
+  body, html { margin:0; padding:0; background:#000; width:2560px; height:1440px; overflow:hidden; }
+  .youtube-canvas {
+    width: 2560px !important;
+    height: 1440px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .banner-stage {
+    position: absolute !important;
+    top: 50% !important;
+    left: 0 !important;
+    transform: translateY(-50%) !important;
+    width: 2560px !important;
+    height: ${SAFE_H}px !important;
+    max-height: unset !important;
+  }
+  .safe-area {
+    width: 2560px !important;
+    height: ${SAFE_H}px !important;
+    transform: scale(${(2560/SAFE_W).toFixed(6)}) !important;
+    transform-origin: left center !important;
+  }
+` });
+await page.waitForTimeout(500);
+
 const fullOutput = OUTPUT.replace(".png", "-full.png");
-const { createCanvas, loadImage } = await import("canvas").catch(() => null) ?? {};
-
-if (createCanvas) {
-  // Use canvas if available
-  const bannerImg = await loadImage(OUTPUT);
-  const canvas    = createCanvas(2560, 1440);
-  const ctx       = canvas.getContext("2d");
-  ctx.fillStyle   = "#000";
-  ctx.fillRect(0, 0, 2560, 1440);
-  // Scale banner to 2560px wide, keeping aspect ratio
-  const bw = 2560;
-  const bh = Math.round(bannerImg.height * (2560 / bannerImg.width));
-  const by = Math.round((1440 - bh) / 2);
-  ctx.drawImage(bannerImg, 0, by, bw, bh);
-  const { writeFileSync } = await import("node:fs");
-  writeFileSync(fullOutput, canvas.toBuffer("image/png"));
-} else {
-  // Fallback: resize viewport and take screenshot with banner centered via CSS
-  await page.setViewportSize({ width: 2560, height: 1440 });
-  await page.addStyleTag({ content: `
-    body { display:flex; align-items:center; justify-content:center;
-           width:2560px; height:1440px; background:#000; overflow:hidden; }
-    .youtube-canvas { width:2560px; height:auto; }
-    .banner-stage { width:2560px; }
-    .safe-area { transform: scale(${(1152/2560).toFixed(4)}); transform-origin: left center; }
-  ` });
-  await page.waitForTimeout(500);
-  await page.screenshot({ path: fullOutput, fullPage: false });
-}
+await page.screenshot({ path: fullOutput, fullPage: false });
 console.log(`✓ Full banner (2560×1440) → ${fullOutput.replace(ROOT, "").replace(/\\/g, "/")}`);
 
 
