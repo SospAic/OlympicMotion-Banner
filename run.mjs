@@ -156,43 +156,22 @@ async function startServer() {
 // ── Step 4: Render banner ─────────────────────────────────────────────────
 async function renderBanner(serverUrl) {
   log("🎨 正在生成 Banner...");
-
-  const outputPath = resolve(ROOT, "dist/banner.png");
-  const exporter   = resolve(ROOT, "exporter/render-banner.mjs");
-
-  const { chromium } = await import("playwright");
   const { mkdirSync } = await import("node:fs");
   mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 
-  const browser = await chromium.launch({ headless: true });
-  const page    = await browser.newPage({
-    viewport:          { width: 2560, height: 1440 },
-    deviceScaleFactor: 1,
+  // Delegate to exporter/render-banner.mjs which saves both
+  // dist/banner.png (2560×423 preview) and dist/banner-full.png (2560×1440 upload)
+  await new Promise((res, rej) => {
+    const proc = spawn(process.execPath, ["exporter/render-banner.mjs", "dist/banner.png"], {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: { ...process.env, BANNER_URL: serverUrl },
+    });
+    proc.on("close", code => code === 0 ? res() : rej(new Error(`render-banner.mjs exited ${code}`)));
   });
 
-  await page.goto(serverUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
-
-  // Wait for app.js to finish painting
-  await page.waitForFunction(
-    () => {
-      const el = document.querySelector("[data-subs]");
-      return el && el.textContent.trim().length > 0 && el.textContent !== "00,000";
-    },
-    { timeout: 15_000 }
-  );
-  await page.waitForTimeout(1000);
-
-  const stage = page.locator(".banner-stage").first();
-  if (await stage.count() === 0) {
-    await browser.close();
-    throw new Error(".banner-stage 未找到，页面渲染失败");
-  }
-
-  await stage.screenshot({ path: outputPath });
-  await browser.close();
-
-  log(`✓ Banner 已生成：dist/banner.png`);
-  return outputPath;
+  log(`✓ Banner 已生成：dist/banner.png + dist/banner-full.png`);
+  return resolve(ROOT, "dist/banner.png");
 }
 
 // ── Step 5: Upload banner ─────────────────────────────────────────────────
