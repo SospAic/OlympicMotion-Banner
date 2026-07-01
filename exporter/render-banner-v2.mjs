@@ -1,9 +1,10 @@
 /**
- * Banner Exporter v2 — Sharp 图片合成版本
- * 以 public/assets/background.png 为底图，直接合成所有元素
- * 不依赖 Playwright/浏览器，速度更快
+ * Banner Exporter v2 — Sharp 精准坐标合成
+ * 只在 background.png 的精确位置叠加动态数据：
+ *   1. 进度条（金色填充 + 当前订阅数居中 + 百分比）
+ *   2. 徽章解锁状态
  *
- * 用法：node exporter/render-banner-v2.mjs
+ * 坐标系基于 background.png 原始尺寸 1983×793
  */
 
 import sharp from "sharp";
@@ -25,242 +26,173 @@ if (!existsSync(BG)) {
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────
-const subs        = Number(CONFIG.data?.subs ?? 0);
-const goal        = Number(CONFIG.mission?.goal ?? 1000000);
-const milestones  = (CONFIG.achievements ?? []).map(a => Number(a.threshold));
-const autoNext    = milestones.find(t => t > subs) ?? goal;
-const prevMile    = [...milestones].reverse().find(t => t <= subs) ?? 0;
-const pctToNext   = Math.min(100, ((subs - prevMile) / (autoNext - prevMile)) * 100);
-const toGo        = autoNext - subs;
+const subs       = Number(CONFIG.data?.subs ?? 0);
+const goal       = Number(CONFIG.mission?.goal ?? 1000000);
+const milestones = (CONFIG.achievements ?? []).map(a => Number(a.threshold));
+const autoNext   = milestones.find(t => t > subs) ?? goal;
+const prevMile   = [...milestones].reverse().find(t => t <= subs) ?? 0;
+const segSize    = autoNext - prevMile;
+const pctToNext  = Math.min(100, segSize > 0 ? ((subs - prevMile) / segSize) * 100 : 100);
+const toGo       = autoNext - subs;
 
-const fmt = n => new Intl.NumberFormat("en-US", {useGrouping:false}).format(n);
-const fmtComma = n => new Intl.NumberFormat("en-US").format(n);
-const compact = n => n >= 1000000 ? (n/1000000).toFixed(0)+"M" : n >= 1000 ? (n/1000).toFixed(0)+"K" : String(n);
+const fmtPlain = n => new Intl.NumberFormat("en-US", { useGrouping: false }).format(n);
+const compact  = n => n >= 1000000 ? (n/1000000).toFixed(0)+"M"
+                    : n >= 1000    ? (n/1000).toFixed(0)+"K"
+                    : String(n);
 
-// ── Canvas dimensions (match background.png proportions) ─────────────────
-// Background is 1920×537 — we'll work at that size then crop/scale
-const meta   = await sharp(BG).metadata();
-const BW     = meta.width  ?? 1920;
-const BH     = meta.height ?? 537;
+console.log(`Subs: ${subs} | Next: ${compact(autoNext)} | Prev: ${compact(prevMile)} | Pct: ${pctToNext.toFixed(1)}%`);
 
-console.log(`Background: ${BW}×${BH}`);
+// ── Background dimensions ─────────────────────────────────────────────────
+const meta = await sharp(BG).metadata();
+const BW = meta.width  ?? 1983;
+const BH = meta.height ?? 793;
 
-// ── Color palette ─────────────────────────────────────────────────────────
-const GOLD    = "#ffc94a";
-const GOLD2   = "#ffbd2e";
-const WHITE   = "#ffffff";
-const DIM     = "rgba(255,255,255,0.75)";
-const DARK    = "rgba(0,0,0,0.75)";
-const PANEL   = "rgba(10,8,4,0.82)";
-const BORDER  = "rgba(255,201,74,0.55)";
+// ── COORDINATE MAP (1983×793) — calibrated from overlay image ────────────
+// Progress bar slot (dark rounded area in background)
+const PB = {
+  x: 537,   // left edge
+  y: 378,   // top edge (cyan test box matched best)
+  w: 413,   // width
+  h: 52,    // height
+  r: 8,     // corner radius
+};
 
-// Scale factor so all coordinates below are designed for 1546px width
-const SC = BW / 1546;
-const s  = v => Math.round(v * SC);  // scale a value
-const sh = v => Math.round(v * SC);  // same, explicit
-
-// ── Achievement badges ────────────────────────────────────────────────────
-function badgeSVG(label, caption, unlocked, x, y, size) {
-  const fill    = unlocked ? "url(#bg)" : "rgba(30,24,8,0.85)";
-  const stroke  = unlocked ? "#ffc94a" : "rgba(255,201,74,0.35)";
-  const iconClr = unlocked ? "#1a1200" : "rgba(255,255,255,0.50)";
-  const textClr = unlocked ? "#ffc94a" : "rgba(255,255,255,0.55)";
-  const subtClr = unlocked ? "rgba(255,255,255,0.70)" : "rgba(255,255,255,0.35)";
-  const r = size * 0.5;
-  return `
-  <defs>
-    <linearGradient id="bg${label}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff4b8"/>
-      <stop offset="0.45" stop-color="#ffc233"/>
-      <stop offset="1" stop-color="#9a5f06"/>
-    </linearGradient>
-  </defs>
-  <g transform="translate(${x},${y})">
-    <path d="M${r} 2 L${size-2} ${size*0.32} v${size*0.35} c0 ${size*0.18} -${size*0.14} ${size*0.30} -${r} ${size*0.37} C${size*0.14} ${size*0.97} 2 ${size*0.85} 2 ${size*0.67} V${size*0.32} Z"
-      fill="${unlocked ? `url(#bg${label})` : fill}" stroke="${stroke}" stroke-width="1.5"/>
-    ${unlocked
-      ? `<path d="M${r*0.42} ${r*1.10} l${r*0.34} ${r*0.34} l${r*0.76} -${r*0.96}" fill="none" stroke="${iconClr}" stroke-width="${size*0.09}" stroke-linecap="round" stroke-linejoin="round"/>`
-      : `<rect x="${r*0.62}" y="${r*0.90}" width="${r*0.76}" height="${r*0.70}" rx="2" fill="${iconClr}"/>
-         <rect x="${r*0.72}" y="${r*0.72}" width="${r*0.56}" height="${r*0.28}" rx="${r*0.12}" fill="none" stroke="${iconClr}" stroke-width="1.5"/>`
-    }
-    <text x="${r}" y="${size+11}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${size*0.34}" fill="${textClr}">${label}</text>
-    <text x="${r}" y="${size+20}" text-anchor="middle" font-family="Arial,sans-serif" font-size="${size*0.18}" fill="${subtClr}">${caption}</text>
-  </g>`;
-}
+// Badge row — 7 badges, Badge-row box: x=712 y=115 w=1175 h=95
+// Each badge center: x0=712+(48/2)=736, step=1175/7≈168
+const BADGE_ROW = {
+  x0:    736,    // center of first badge
+  y:      162,   // vertical center (y=115 + 95/2 ≈ 162)
+  step:   168,   // 1175 / 7
+  size:    50,   // icon size
+  labelY: 208,   // label below icon
+  captY:  223,   // caption below label
+};
 
 // ── Build SVG overlay ─────────────────────────────────────────────────────
-// Layout zones (designed at 1546px width):
-//  Left:   0  – 415   (brand)
-//  Mid:  415  – 990   (mission + stats)
-//  Right: 990 – 1546  (achievements)
-//  Bottom: feature strip
+const fillW = Math.round(PB.w * pctToNext / 100);
 
-const W = BW, H = BH;
-
-// Mid panel dimensions
-const MP_X = s(415), MP_W = s(575);
-// Progress bar
-const PB_X = s(420), PB_Y = s(220), PB_W = s(380), PB_H = s(60);
-const FILL_W = Math.round(PB_W * pctToNext / 100);
-// Next goal box
-const NG_X = s(820), NG_Y = s(205), NG_W = s(145), NG_H = s(90);
-// Badge row
-const BAD_Y = s(55), BAD_SIZE = s(54), BAD_GAP = s(10);
-const BAD_X0 = s(1000);
+// Badge SVG helper
 const badges = CONFIG.achievements ?? [];
-const badgeSVGs = badges.map((b, i) => {
-  const bx = BAD_X0 + i * (BAD_SIZE + BAD_GAP);
-  return badgeSVG(b.label, b.caption.replace("Subscribers","SUBS"), subs >= b.threshold, bx, BAD_Y, BAD_SIZE);
-}).join("");
+function badgeSVG(b, i) {
+  const unlocked = subs >= Number(b.threshold);
+  const cx = BADGE_ROW.x0 + i * BADGE_ROW.step;
+  const cy = BADGE_ROW.y;
+  const sz = BADGE_ROW.size;
+  const r  = sz * 0.5;
 
-// Feature strip icons (text only for simplicity)
-const features = ["EPIC MOMENTS","UNTOLD STORIES","OLYMPIC LEGENDS","BEHIND THE SCENES","WEEKLY UPLOADS"];
-const FY = H - s(28);
-const fStrip = features.map((f, i) => {
-  const fx = s(380) + i * s(120);
-  return `<text x="${fx}" y="${FY}" font-family="Arial Narrow,Arial,sans-serif" font-weight="700" font-size="${s(11)}" fill="rgba(255,255,255,0.80)" letter-spacing="0.5">${f}</text>`;
-}).join("");
+  if (unlocked) {
+    // Gold filled shield with checkmark
+    return `
+    <g>
+      <path d="M${cx} ${cy-r+2} L${cx+r-2} ${cy-r*0.48} v${r*0.88} c0 ${r*0.46} -${r*0.36} ${r*0.78} -${r-2} ${r*0.96} c-${r*0.58} -${r*0.18} -${r-2} -${r*0.50} -${r-2} -${r*0.96} V${cy-r*0.48} Z"
+        fill="url(#gld)" stroke="#ffe896" stroke-width="1.5" filter="url(#glow)"/>
+      <path d="M${cx-r*0.32} ${cy} l${r*0.28} ${r*0.28} l${r*0.62} -${r*0.78}"
+        fill="none" stroke="#1a1200" stroke-width="${sz*0.10}" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
+        font-family="Arial Black,Impact,sans-serif" font-weight="900"
+        font-size="13" fill="#ffc94a">${b.label}</text>
+      <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
+        font-family="Arial,sans-serif" font-size="9" fill="rgba(255,255,255,0.70)">SUBSCRIBERS</text>
+    </g>`;
+  } else {
+    // Locked — dim shield with padlock
+    return `
+    <g opacity="0.55">
+      <path d="M${cx} ${cy-r+2} L${cx+r-2} ${cy-r*0.48} v${r*0.88} c0 ${r*0.46} -${r*0.36} ${r*0.78} -${r-2} ${r*0.96} c-${r*0.58} -${r*0.18} -${r-2} -${r*0.50} -${r-2} -${r*0.96} V${cy-r*0.48} Z"
+        fill="rgba(30,22,6,0.88)" stroke="rgba(255,201,74,0.32)" stroke-width="1.2"/>
+      <rect x="${cx-r*0.26}" y="${cy-r*0.08}" width="${r*0.52}" height="${r*0.46}" rx="2" fill="rgba(255,255,255,0.55)"/>
+      <rect x="${cx-r*0.22}" y="${cy-r*0.26}" width="${r*0.44}" height="${r*0.24}" rx="${r*0.10}"
+        fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
+      <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
+        font-family="Arial Black,Impact,sans-serif" font-weight="900"
+        font-size="13" fill="rgba(255,201,74,0.55)">${b.label}</text>
+      <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
+        font-family="Arial,sans-serif" font-size="9" fill="rgba(255,255,255,0.40)">SUBSCRIBERS</text>
+    </g>`;
+  }
+}
 
-// Social icons text
-const socials = [
-  { name:"YT",  color:"#FF0000" },
-  { name:"IG",  color:"#E1306C" },
-  { name:"TT",  color:"#ffffff" },
-  { name:"X",   color:"#ffffff" },
-];
-const SOC_Y = H - s(42);
-const SOC_X0 = s(1380);
-const socSVG = socials.map((sc, i) => {
-  const sx = SOC_X0 + i * s(38);
-  return `
-  <circle cx="${sx+s(14)}" cy="${SOC_Y+s(2)}" r="${s(14)}" fill="rgba(255,255,255,0.10)" stroke="rgba(255,201,74,0.40)" stroke-width="1"/>
-  <text x="${sx+s(14)}" y="${SOC_Y+s(7)}" text-anchor="middle" font-family="Arial Black,sans-serif" font-weight="900" font-size="${s(9)}" fill="${sc.color}">${sc.name}</text>`;
-}).join("");
-
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BW}" height="${BH}">
 <defs>
-  <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#fffae8"/>
+  <linearGradient id="gld" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0"    stop-color="#fffae8"/>
     <stop offset="0.15" stop-color="#ffd95a"/>
     <stop offset="0.45" stop-color="#ffc233"/>
     <stop offset="0.72" stop-color="#f5a615"/>
-    <stop offset="1" stop-color="#a85f00"/>
+    <stop offset="1"    stop-color="#a85f00"/>
   </linearGradient>
-  <linearGradient id="progressGrad" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0" stop-color="#fffae8"/>
-    <stop offset="0.15" stop-color="#ffd95a"/>
-    <stop offset="0.5" stop-color="#ffc233"/>
-    <stop offset="1" stop-color="#a85f00"/>
+  <linearGradient id="pgrd" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0"    stop-color="#fffae8"/>
+    <stop offset="0.2"  stop-color="#ffd95a"/>
+    <stop offset="0.55" stop-color="#ffc233"/>
+    <stop offset="1"    stop-color="#a85f00"/>
   </linearGradient>
   <filter id="glow">
-    <feGaussianBlur stdDeviation="3" result="blur"/>
-    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <feGaussianBlur stdDeviation="3" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
   </filter>
-  <filter id="textGlow">
-    <feGaussianBlur stdDeviation="4" result="blur"/>
-    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  <filter id="shadow">
+    <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.90)"/>
   </filter>
   <clipPath id="pbClip">
-    <rect x="${PB_X}" y="${PB_Y}" width="${PB_W}" height="${PB_H}" rx="${s(10)}"/>
+    <rect x="${PB.x}" y="${PB.y}" width="${PB.w}" height="${PB.h}" rx="${PB.r}"/>
   </clipPath>
 </defs>
 
-<!-- ── MISSION KICKER ── -->
-<text x="${s(698)}" y="${s(42)}" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-weight="800" font-size="${s(13)}" fill="${GOLD}" letter-spacing="6">&#xBB; MISSION &#xAB;</text>
+<!-- ── PROGRESS BAR fill ── -->
+<rect x="${PB.x}" y="${PB.y}" width="${fillW}" height="${PB.h}" rx="${PB.r}"
+  fill="url(#pgrd)" clip-path="url(#pbClip)"/>
 
-<!-- ── MISSION TITLE ── -->
-<text x="${s(698)}" y="${s(82)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(42)}" fill="${WHITE}" font-style="italic">ROAD TO </text>
-<text x="${s(698)}" y="${s(82)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(42)}" fill="transparent" font-style="italic">
-  <tspan fill="${WHITE}">ROAD TO </tspan><tspan fill="url(#goldGrad)">1M</tspan><tspan fill="${WHITE}"> CHAMPIONS</tspan>
-</text>
-
-<!-- ── SUBSCRIBER CARD background ── -->
-<rect x="${s(418)}" y="${s(100)}" width="${s(570)}" height="${s(200)}" rx="${s(14)}" fill="${PANEL}" stroke="${BORDER}" stroke-width="1.5"/>
-
-<!-- ── SUBSCRIBER LABEL ── -->
-<text x="${s(437)}" y="${s(128)}" font-family="Arial Narrow,Arial,sans-serif" font-weight="700" font-size="${s(13)}" fill="${GOLD}" letter-spacing="1">&#9679; SUBSCRIBERS</text>
-
-<!-- ── BIG NUMBER ── -->
-<text x="${s(600)}" y="${s(200)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(72)}" fill="${WHITE}" filter="url(#textGlow)" letter-spacing="-2">${fmt(subs)}</text>
-
-<!-- ── PROGRESS BAR track ── -->
-<rect x="${PB_X}" y="${PB_Y}" width="${PB_W}" height="${PB_H}" rx="${s(10)}" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.45)" stroke-width="1.5"/>
-<!-- fill -->
-<rect x="${PB_X}" y="${PB_Y}" width="${FILL_W}" height="${PB_H}" rx="${s(10)}" fill="url(#progressGrad)" clip-path="url(#pbClip)"/>
-<!-- stripe overlay -->
-<g clip-path="url(#pbClip)">
-  ${Array.from({length:20},(_,i)=>`<line x1="${PB_X+i*s(22)}" y1="${PB_Y}" x2="${PB_X+i*s(22)+s(10)}" y2="${PB_Y+PB_H}" stroke="rgba(255,255,255,0.12)" stroke-width="${s(8)}"/>`).join("")}
+<!-- Progress bar shimmer stripes -->
+<g clip-path="url(#pbClip)" opacity="0.15">
+  ${Array.from({length: 22}, (_, i) =>
+    `<rect x="${PB.x + i*20}" y="${PB.y}" width="10" height="${PB.h}" fill="white" transform="skewX(-12)"/>`
+  ).join("")}
 </g>
-<!-- % text -->
-<text x="${PB_X+PB_W-s(14)}" y="${PB_Y+PB_H*0.62}" text-anchor="end" font-family="Arial Black,sans-serif" font-weight="900" font-size="${s(22)}" fill="${WHITE}" text-shadow="0 2px 8px #000">${pctToNext.toFixed(1)}%</text>
-<!-- target -->
-<text x="${PB_X+PB_W/2}" y="${PB_Y+PB_H+s(15)}" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-size="${s(11)}" fill="rgba(255,255,255,0.60)" letter-spacing="1">TARGET: ${fmtComma(goal)}</text>
 
-<!-- ── NEXT GOAL box ── -->
-<rect x="${NG_X}" y="${NG_Y}" width="${NG_W}" height="${NG_H}" rx="${s(10)}" fill="${PANEL}" stroke="${BORDER}" stroke-width="1.5"/>
-<text x="${NG_X+NG_W/2}" y="${NG_Y+s(22)}" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-weight="700" font-size="${s(11)}" fill="${GOLD}" letter-spacing="1">NEXT GOAL</text>
-<text x="${NG_X+NG_W/2}" y="${NG_Y+s(60)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(36)}" fill="url(#goldGrad)" filter="url(#glow)">${compact(autoNext)}</text>
-<text x="${NG_X+NG_W/2}" y="${NG_Y+s(80)}" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-style="italic" font-size="${s(11)}" fill="rgba(255,255,255,0.75)">${fmtComma(toGo)} TO GO!</text>
+<!-- ── SUBSCRIBER NUMBER centered in bar ── -->
+<text x="${PB.x + PB.w * 0.42}" y="${PB.y + PB.h * 0.65}"
+  text-anchor="middle"
+  font-family="Arial Black,Impact,sans-serif" font-weight="900"
+  font-size="36" fill="white" filter="url(#shadow)"
+  letter-spacing="-1">${fmtPlain(subs)}</text>
 
-<!-- ── CTA STRIP ── -->
-<rect x="${s(430)}" y="${s(310)}" width="${s(545)}" height="${s(46)}" rx="${s(6)}"
-  fill="rgba(255,196,42,0.12)" stroke="rgba(255,201,74,0.75)" stroke-width="1.5"/>
-<text x="${s(704)}" y="${s(340)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(16)}" font-style="italic" fill="${WHITE}" letter-spacing="1">SUBSCRIBE &amp; BE PART OF </text>
-<text x="${s(704)}" y="${s(340)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(16)}" font-style="italic" fill="transparent">
-  <tspan fill="${WHITE}">SUBSCRIBE &amp; BE PART OF </tspan><tspan fill="${GOLD2}">THE JOURNEY</tspan>
-</text>
-
-<!-- ── ACHIEVEMENTS TITLE ── -->
-<text x="${s(1268)}" y="${s(32)}" text-anchor="middle" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(18)}" font-style="italic" fill="${GOLD}" letter-spacing="2">&#9733; &#9733; ACHIEVEMENTS &#9733; &#9733;</text>
+<!-- ── PERCENTAGE right side of bar ── -->
+<text x="${PB.x + PB.w - 8}" y="${PB.y + PB.h * 0.66}"
+  text-anchor="end"
+  font-family="Arial Black,sans-serif" font-weight="900"
+  font-size="22" fill="white" filter="url(#shadow)">${pctToNext.toFixed(1)}%</text>
 
 <!-- ── BADGES ── -->
-${badgeSVGs}
-
-<!-- ── MANIFESTO ── -->
-<text x="${s(1005)}" y="${s(195)}" font-family="Arial Black,Impact,sans-serif" font-weight="800" font-size="${s(14)}" font-style="italic" fill="${WHITE}" letter-spacing="0.5">ONE CHANNEL.</text>
-<text x="${s(1005)}" y="${s(215)}" font-family="Arial Black,Impact,sans-serif" font-weight="800" font-size="${s(14)}" font-style="italic" fill="${WHITE}" letter-spacing="0.5">ONE MISSION.</text>
-<text x="${s(1005)}" y="${s(235)}" font-family="Arial Black,Impact,sans-serif" font-weight="800" font-size="${s(14)}" font-style="italic" fill="${WHITE}" letter-spacing="0.5">MILLIONS OF STORIES.</text>
-<text x="${s(1005)}" y="${s(258)}" font-family="Arial Black,Impact,sans-serif" font-weight="900" font-size="${s(14)}" font-style="italic" fill="${GOLD2}" letter-spacing="0.5">LET'S MAKE HISTORY TOGETHER!</text>
-
-<!-- ── FOLLOW & CONNECT ── -->
-<text x="${s(1390)}" y="${s(295)}" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-weight="700" font-size="${s(10)}" fill="${GOLD}" letter-spacing="2">FOLLOW &amp; CONNECT</text>
-${socSVG}
-
-<!-- ── FEATURE STRIP ── -->
-<line x1="${s(380)}" y1="${H-s(46)}" x2="${s(1180)}" y2="${H-s(46)}" stroke="rgba(255,201,74,0.20)" stroke-width="1"/>
-${fStrip}
+${badges.map(badgeSVG).join("\n")}
 
 </svg>`;
 
-// ── Composite ─────────────────────────────────────────────────────────────
+// ── Composite onto background ─────────────────────────────────────────────
 console.log("🎨 合成 Banner v2...");
 
 await sharp(BG)
-  .resize(BW, BH)
-  .composite([{
-    input: Buffer.from(svg),
-    top: 0,
-    left: 0,
-  }])
+  .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
   .png({ quality: 95 })
   .toFile(OUTPUT);
 
 console.log(`✓ Banner v2 (${BW}×${BH}) → dist/banner-v2.png`);
 
-// Full 2560×1440 version for YouTube upload
-const ratio   = BH / BW;
-const FULL_W  = 2560;
-const FULL_H  = 1440;
+// ── Full 2560×1440 for YouTube ────────────────────────────────────────────
+const ratio    = BH / BW;
+const FULL_W   = 2560;
+const FULL_H   = 1440;
 const BANNER_H = Math.round(FULL_W * ratio);
-const TOP_Y   = Math.round((FULL_H - BANNER_H) / 2);
+const TOP_Y    = Math.round((FULL_H - BANNER_H) / 2);
 
-await sharp({ create: { width: FULL_W, height: FULL_H, channels: 4, background: { r:0,g:0,b:0,alpha:1 } } })
-  .composite([{
-    input: await sharp(OUTPUT).resize(FULL_W, BANNER_H).toBuffer(),
-    top: TOP_Y,
-    left: 0,
-  }])
-  .png({ quality: 95 })
-  .toFile(FULL);
+await sharp({
+  create: { width: FULL_W, height: FULL_H, channels: 4,
+            background: { r:0, g:0, b:0, alpha:1 } }
+}).composite([{
+  input: await sharp(OUTPUT).resize(FULL_W, BANNER_H).toBuffer(),
+  top: TOP_Y, left: 0,
+}])
+.png({ quality: 95 })
+.toFile(FULL);
 
 console.log(`✓ Full banner (${FULL_W}×${FULL_H}) → dist/banner-v2-full.png`);
