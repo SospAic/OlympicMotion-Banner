@@ -139,12 +139,22 @@
 
 .brand-panel {
   display: flex;
-  flex-direction: row;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
   min-width: 0;
   overflow: hidden;
-  padding-left: 0.5%;
+  padding: 0.5% 0 0.5% 0.8%;
+  gap: clamp(4px, 0.5vw, 10px);
+  align-self: stretch;
+}
+
+.brand-top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: clamp(6px, 0.7vw, 14px);
+  min-width: 0;
 }
 
 .logo-orbit {
@@ -194,6 +204,43 @@
   text-transform: uppercase;
   padding-left: clamp(4px, 0.4vw, 8px);
   overflow: hidden;
+}
+
+/* slogan is now a direct child of brand-panel */
+.brand-panel > p[data-slogan] {
+  margin: 0;
+  padding-left: 0.3%;
+  color: #fff;
+  font: italic 800 clamp(9px, 1.15vw, 18px)/1 var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.brand-panel > p[data-slogan]::before {
+  content: "";
+  display: inline-block;
+  width: clamp(14px, 1.5vw, 24px);
+  height: 2px;
+  background: var(--gold-200);
+  flex-shrink: 0;
+}
+
+.brand-panel > p[data-slogan]::after {
+  content: "";
+  display: inline-block;
+  width: clamp(14px, 1.5vw, 24px);
+  height: 2px;
+  background: var(--gold-200);
+  flex-shrink: 0;
+}
+
+.brand-panel > p[data-slogan] em {
+  font-style: italic;
+  color: var(--gold-200);
 }
 
 .brand-copy h1 {
@@ -511,13 +558,14 @@
 .achievement-panel {
   min-width: 0;
   border-radius: clamp(8px, 1vw, 16px);
-  padding: clamp(5px, 0.7vw, 11px) clamp(5px, 0.7vw, 11px);
+  padding: clamp(4px, 0.6vw, 10px) clamp(4px, 0.6vw, 10px);
   align-self: stretch;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0;
   justify-content: space-between;
+  width: 100%;
 }
 
 .achievement-title {
@@ -537,17 +585,18 @@
 }
 
 .badge-grid {
-  margin-top: 0.6%;
+  margin-top: 0.4%;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: clamp(2px, 0.35vw, 6px);
+  gap: clamp(2px, 0.3vw, 5px);
   flex-shrink: 0;
+  width: 100%;
 }
 
 .badge {
   display: grid;
   justify-items: center;
-  gap: clamp(2px, 0.25vw, 4px);
+  gap: clamp(1px, 0.2vw, 3px);
   opacity: .40;
   animation: badgePop .5s both;
 }
@@ -607,14 +656,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: clamp(4px, 0.5vw, 10px);
-  padding-top: 0.4%;
+  justify-content: flex-end;
+  gap: clamp(3px, 0.4vw, 8px);
+  padding: 0 0.4% 0.3%;
+  width: 100%;
 }
 
 .social-label {
   color: var(--gold-100);
-  font: italic 700 clamp(8px, 0.9vw, 14px)/1 var(--font-display);
+  font: italic 700 clamp(7px, 0.85vw, 13px)/1 var(--font-display);
   text-transform: uppercase;
   letter-spacing: 2px;
   margin: 0;
@@ -624,22 +674,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(6px, 0.9vw, 18px);
-  flex-wrap: wrap;
+  gap: clamp(4px, 0.7vw, 14px);
+  flex-wrap: nowrap;
+  width: 100%;
 }
 
 .social-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: clamp(24px, 3.2vw, 52px);
-  height: clamp(24px, 3.2vw, 52px);
+  width: clamp(20px, 2.8vw, 44px);
+  height: clamp(20px, 2.8vw, 44px);
   border-radius: 50%;
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,201,74,.35);
   transition: background 0.2s, border-color 0.2s;
   text-decoration: none;
-  box-shadow: 0 0 10px rgba(255,196,42,.18);
+  box-shadow: 0 0 8px rgba(255,196,42,.15);
+  flex-shrink: 0;
 }
 
 .social-icon:hover {
@@ -648,8 +700,8 @@
 }
 
 .social-icon svg {
-  width: clamp(12px, 1.6vw, 26px);
-  height: clamp(12px, 1.6vw, 26px);
+  width: clamp(10px, 1.4vw, 22px);
+  height: clamp(10px, 1.4vw, 22px);
   fill: rgba(255,255,255,.85);
 }
 
@@ -662,9 +714,10 @@
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  gap: clamp(3px, 0.4vw, 8px);
+  gap: 0;
   min-width: 0;
-  padding: 0 0.3%;
+  padding: 0 0.5%;
+  border-top: 1px solid rgba(255,201,74,.18);
 }
 
 .feature-strip span {
