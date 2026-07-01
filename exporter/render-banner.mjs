@@ -78,8 +78,10 @@ if (!process.env.BANNER_URL) {
 
 // ── Screenshot ────────────────────────────────────────────────────────────
 const browser = await chromium.launch({ headless: true });
+// Use 1152×648 viewport to match the user's actual browser innerWidth
+// This ensures all vw/clamp CSS values produce identical results to the browser
 const page    = await browser.newPage({
-  viewport:          { width: 2560, height: 1440 },
+  viewport:          { width: 1152, height: 648 },
   deviceScaleFactor: 1,
 });
 
@@ -113,31 +115,11 @@ try {
   throw new Error("app.js did not finish painting within 15s — see debug screenshot");
 }
 
-// ── Wait for all visual elements to fully render ──────────────────────────
-
-// 1. Wait for web fonts to load (Barlow Condensed)
-await page.evaluate(() => document.fonts.ready);
-
-// 2. Wait for all 7 badges to appear in DOM
-await page.waitForFunction(
-  () => document.querySelectorAll(".badge").length >= 7,
-  { timeout: 10_000 }
-).catch(() => console.warn("⚠  badges not all rendered, continuing anyway"));
-
-// 3. Wait for progress bar transition to complete (1.2s transition)
-await page.waitForFunction(
-  () => {
-    const fill = document.querySelector("[data-progress-fill],.sub-progress-fill");
-    if (!fill) return true;
-    const w = getComputedStyle(fill).width;
-    return w !== "0px";
-  },
-  { timeout: 5_000 }
-).catch(() => {});
-
-// 4. Final wait for CSS animations (goldSweep 5.4s, ringPulse 3.8s — capture mid-animation)
-// We want at least one full cycle of the shortest animation (barSpark 2.4s)
-await page.waitForTimeout(4000);
+// Extra wait for CSS animations, font rendering and badge pop-in animations
+// badgePop animation is 0.5s with delays up to 65ms * 6 = ~0.9s total
+// numFlash animation is 1.2s
+// ringPulse, goldSweep etc need to complete at least one cycle
+await page.waitForTimeout(5000);
 
 if (pageErrors.length) {
   console.warn("Non-fatal page errors:", pageErrors);
@@ -154,38 +136,44 @@ if (count === 0) {
   throw new Error(".banner-stage not found — check debug screenshot");
 }
 
-// Save full 2560×1440 for YouTube upload (requires 16:9, min 2048×1152)
-// Inject style to make banner fill the full viewport for the upload screenshot
-await page.addStyleTag({ content: `
-  body {
-    display: block !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    min-height: 1440px !important;
-    background: #000 !important;
-  }
-  .youtube-canvas {
-    width: 2560px !important;
-    height: 1440px !important;
-    aspect-ratio: unset !important;
-  }
-  .banner-stage {
-    /* Keep banner-stage centered in the 1440px tall canvas */
-    position: absolute !important;
-    top: 50% !important;
-    left: 0 !important;
-    transform: translateY(-50%) !important;
-    width: 2560px !important;
-    height: 423px !important;
-  }
-` });
-await page.waitForTimeout(200);
-
-const fullOutput = OUTPUT.replace(".png", "-full.png");
-await page.screenshot({ path: fullOutput, fullPage: false });
-
-// Also crop to banner stage for preview
+// Step 1: Screenshot the banner stage at current viewport (matches browser visual)
 await stage.screenshot({ path: OUTPUT });
+console.log(`✓ Banner preview → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
+
+// Step 2: Create 2560×1440 full image for YouTube upload
+// YouTube needs 16:9 min 2048×1152; we place the banner centered on black canvas
+const fullOutput = OUTPUT.replace(".png", "-full.png");
+const { createCanvas, loadImage } = await import("canvas").catch(() => null) ?? {};
+
+if (createCanvas) {
+  // Use canvas if available
+  const bannerImg = await loadImage(OUTPUT);
+  const canvas    = createCanvas(2560, 1440);
+  const ctx       = canvas.getContext("2d");
+  ctx.fillStyle   = "#000";
+  ctx.fillRect(0, 0, 2560, 1440);
+  // Scale banner to 2560px wide, keeping aspect ratio
+  const bw = 2560;
+  const bh = Math.round(bannerImg.height * (2560 / bannerImg.width));
+  const by = Math.round((1440 - bh) / 2);
+  ctx.drawImage(bannerImg, 0, by, bw, bh);
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(fullOutput, canvas.toBuffer("image/png"));
+} else {
+  // Fallback: resize viewport and take screenshot with banner centered via CSS
+  await page.setViewportSize({ width: 2560, height: 1440 });
+  await page.addStyleTag({ content: `
+    body { display:flex; align-items:center; justify-content:center;
+           width:2560px; height:1440px; background:#000; overflow:hidden; }
+    .youtube-canvas { width:2560px; height:auto; }
+    .banner-stage { width:2560px; }
+    .safe-area { transform: scale(${(1152/2560).toFixed(4)}); transform-origin: left center; }
+  ` });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: fullOutput, fullPage: false });
+}
+console.log(`✓ Full banner (2560×1440) → ${fullOutput.replace(ROOT, "").replace(/\\/g, "/")}`);
+
 
 await browser.close();
 proc?.kill();
