@@ -131,9 +131,15 @@ if (count === 0) {
   throw new Error(".banner-stage not found — check debug screenshot");
 }
 
+// Save full 2560×1440 for YouTube upload (requires 16:9, min 2048×1152)
+const fullOutput = OUTPUT.replace(".png", "-full.png");
+await page.screenshot({ path: fullOutput, fullPage: false });
+
+// Also crop to banner stage for preview
 await stage.screenshot({ path: OUTPUT });
 
 await browser.close();
 proc?.kill();
 
-console.log(`✓ Banner exported → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
+console.log(`✓ Banner preview (2560×423) → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
+console.log(`✓ Full banner (2560×1440)  → ${fullOutput.replace(ROOT, "").replace(/\\/g, "/")}`);

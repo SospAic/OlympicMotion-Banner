@@ -25,6 +25,9 @@ import { chromium }                 from "playwright";
 
 const ROOT          = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const BANNER_FILE   = resolve(process.env.BANNER_FILE ?? "dist/banner.png");
+// Use full 2560×1440 for upload if available (YouTube requires 16:9 min 2048×1152)
+const BANNER_FULL   = BANNER_FILE.replace(".png", "-full.png");
+const UPLOAD_FILE   = existsSync(BANNER_FULL) ? BANNER_FULL : BANNER_FILE;
 const SESSION_FILE  = resolve(ROOT, ".session/youtube-session.json");
 const SESSION_ENC   = resolve(ROOT, ".session/youtube-session.enc");
 const YT_COOKIES    = process.env.YOUTUBE_COOKIES;
@@ -38,6 +41,7 @@ if (!existsSync(BANNER_FILE)) {
   console.error(`❌ Banner 文件不存在：${BANNER_FILE}`);
   process.exit(1);
 }
+console.log(`  上传文件：${UPLOAD_FILE.includes("-full") ? "全尺寸 2560×1440" : "裁切版 2560×423"}`);
 
 // ── Route to correct mode ─────────────────────────────────────────────────
 const hasSession = existsSync(SESSION_ENC) || existsSync(SESSION_FILE);
@@ -309,8 +313,8 @@ async function _performUpload(page, browser) {
     process.exit(1);
   }
 
-  console.log(`📤 正在上传：${BANNER_FILE}`);
-  await fileInput.setInputFiles(BANNER_FILE);
+  console.log(`📤 正在上传：${UPLOAD_FILE}`);
+  await fileInput.setInputFiles(UPLOAD_FILE);
   await page.waitForTimeout(2000);
 
   console.log("💾 正在保存...");
@@ -380,8 +384,8 @@ async function uploadViaOAuth() {
   console.log("  Scopes:", tokenData.scope ?? "未返回");
 
   // Step 2: Upload banner image via channelBanners.insert
-  console.log(`📤 正在上传 Banner：${BANNER_FILE}`);
-  const imageBytes = readFileSync(BANNER_FILE);
+  console.log(`📤 正在上传 Banner：${UPLOAD_FILE}`);
+  const imageBytes = readFileSync(UPLOAD_FILE);
   const BOUNDARY   = `banner_${Date.now()}`;
 
   const body = Buffer.concat([
