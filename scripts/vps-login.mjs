@@ -143,12 +143,6 @@ if (EXISTING_RT) {
       if (channelTitle && !channelTitle.includes("未找到")) {
         console.log("✓ refresh_token 仍然有效，无需重新授权（避免触发 Grant Limit）");
       }
-      let email = "unknown";
-      try {
-        const i = await (await fetch("https://www.googleapis.com/oauth2/v2/userinfo",
-          { headers: { Authorization: `Bearer ${testData.access_token}` } })).json();
-        email = i.email ?? "unknown";
-      } catch { /* ignore */ }
       const sessionData = {
         createdAt: new Date().toISOString(), email,
         loginMethod: "vps-oauth",
