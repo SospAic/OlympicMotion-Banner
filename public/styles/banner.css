@@ -1,4 +1,4 @@
-﻿.youtube-canvas {
+youtube-canvas {
   width: 100vw;
   min-height: 100vh;
   position: relative;
@@ -120,10 +120,10 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: 28% 40% 32%;
+  grid-template-columns: 27% 42% 31%;
   grid-template-rows: 1fr clamp(24px, 2.8vw, 42px);
-  gap: 0 0.6%;
-  padding: 0.5% 0.5% 0.3%;
+  gap: 0 0.5%;
+  padding: 0.5% 0.4% 0.3%;
   overflow: hidden;
 }
 
@@ -140,12 +140,12 @@
 .brand-panel {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   min-width: 0;
   overflow: hidden;
-  padding: 0.5% 0 0.5% 0.8%;
-  gap: clamp(4px, 0.5vw, 10px);
+  padding: 0.4% 0.5%;
+  gap: clamp(3px, 0.4vw, 8px);
   align-self: stretch;
 }
 
@@ -153,12 +153,16 @@
   display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 0.9vw, 16px);
+  min-width: 0;
+}
   gap: clamp(6px, 0.7vw, 14px);
   min-width: 0;
 }
 
 .logo-orbit {
-  width: clamp(88px, 9.2vw, 156px);
+  width: clamp(100px, 10.5vw, 170px);
   aspect-ratio: 1;
   position: relative;
   display: grid;
@@ -191,7 +195,7 @@
 }
 
 .logo-img {
-  width: clamp(68px, 7.2vw, 120px);
+  width: clamp(78px, 8.3vw, 134px);
   aspect-ratio: 1;
   border-radius: 50%;
   position: relative;
@@ -249,9 +253,10 @@
   font-style: italic;
   line-height: .88;
   letter-spacing: -0.5px;
-  font-size: clamp(18px, 3.5vw, 56px);
+  font-size: clamp(22px, 4.2vw, 66px);
   text-shadow: 0 8px 24px rgba(0,0,0,.9);
   overflow: hidden;
+  text-align: center;
 }
 
 .brand-copy h1 span,
@@ -313,9 +318,9 @@
   overflow: visible;
   display: flex;
   flex-direction: column;
-  padding-top: 0;
+  padding: 0.4% 0.3% 0;
   justify-content: space-between;
-  gap: 0;
+  gap: clamp(2px, 0.3vw, 5px);
 }
 
 .mission-kicker {
@@ -332,13 +337,13 @@
 
 .mission-kicker::before,
 .mission-kicker::after {
-  content: "禄";
+  content: "\00BB";
   letter-spacing: 0;
   font-size: .9em;
 }
 
 .mission-kicker::before {
-  content: "芦";
+  content: "\00AB";
 }
 
 .mission-panel h2 {
@@ -373,8 +378,7 @@
   backdrop-filter: blur(10px);
 }
 
-/* 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?   Subscriber card 鈥?progress-bar-as-hero layout
-   鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?*/
+
 
 .subscriber-card {
   position: relative;
@@ -397,7 +401,7 @@
   pointer-events: none;
 }
 
-/* 鈹€鈹€ Big progress bar that holds the subscriber count 鈹€鈹€ */
+
 .sub-progress-wrap {
   min-width: 0;
 }
@@ -497,7 +501,7 @@
   flex-shrink: 0;
 }
 
-/* 鈹€鈹€ Right column: next goal 鈹€鈹€ */
+
 .next-goal {
   border-left: 1px solid rgba(255,201,74,.28);
   padding-left: clamp(6px, 0.8vw, 12px);
@@ -526,7 +530,7 @@
   font: italic 700 clamp(8px, 1.0vw, 15px)/1 var(--font-display);
 }
 
-/* 鈹€鈹€ Old progress-shell/track hidden (removed from HTML) 鈹€鈹€ */
+
 .progress-shell,
 .progress-track,
 .progress-fill { display: none; }
@@ -558,12 +562,12 @@
 .achievement-panel {
   min-width: 0;
   border-radius: clamp(8px, 1vw, 16px);
-  padding: clamp(4px, 0.6vw, 10px) clamp(4px, 0.6vw, 10px);
+  padding: clamp(4px, 0.5vw, 8px) clamp(8px, 1.2vw, 20px) clamp(4px, 0.5vw, 8px) clamp(4px, 0.5vw, 8px);
   align-self: stretch;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: clamp(2px, 0.3vw, 5px);
   justify-content: space-between;
   width: 100%;
 }
@@ -650,7 +654,7 @@
   color: rgba(255,255,255,.70);
 }
 
-/* 鈹€鈹€ Social block (replaces manifesto text) 鈹€鈹€ */
+
 .social-block {
   flex: 1;
   display: flex;
