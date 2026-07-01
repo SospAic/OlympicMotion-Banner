@@ -83,7 +83,7 @@ const browser = await chromium.launch({ headless: true });
 // This forces banner-stage to fill the entire viewport with no scaling artifacts.
 // All vw units resolve against 1546px which produces correct visual proportions.
 const SAFE_W = 1546;
-const SAFE_H = 423;
+const SAFE_H = 380;
 
 const page = await browser.newPage({
   viewport:          { width: SAFE_W, height: SAFE_H },
