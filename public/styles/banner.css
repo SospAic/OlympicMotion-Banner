@@ -120,10 +120,10 @@
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: 29% 38% 33%;
-  grid-template-rows: 1fr clamp(28px, 3.2vw, 48px);
-  gap: 0 0.8%;
-  padding: 0.6% 0.5% 0.4%;
+  grid-template-columns: 27% 40% 33%;
+  grid-template-rows: 1fr clamp(26px, 3.0vw, 44px);
+  gap: 0 0.6%;
+  padding: 1.0% 0.8% 0.4%;
   overflow: hidden;
 }
 
@@ -138,23 +138,14 @@
 }
 
 .brand-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: clamp(80px, 8.5vw, 140px) minmax(0, 1fr);
+  align-items: center;
+  align-content: center;
   min-width: 0;
   overflow: hidden;
-  padding: 0.5% 0 0.5% 0.8%;
-  gap: clamp(4px, 0.5vw, 10px);
-  align-self: stretch;
-}
-
-.brand-top {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: clamp(6px, 0.7vw, 14px);
-  min-width: 0;
+  padding-left: 1%;
+  gap: 0 clamp(6px, 0.8vw, 14px);
 }
 
 .logo-orbit {
@@ -206,50 +197,13 @@
   overflow: hidden;
 }
 
-/* slogan is now a direct child of brand-panel */
-.brand-panel > p[data-slogan] {
-  margin: 0;
-  padding-left: 0.3%;
-  color: #fff;
-  font: italic 800 clamp(9px, 1.15vw, 18px)/1 var(--font-display);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.brand-panel > p[data-slogan]::before {
-  content: "";
-  display: inline-block;
-  width: clamp(14px, 1.5vw, 24px);
-  height: 2px;
-  background: var(--gold-200);
-  flex-shrink: 0;
-}
-
-.brand-panel > p[data-slogan]::after {
-  content: "";
-  display: inline-block;
-  width: clamp(14px, 1.5vw, 24px);
-  height: 2px;
-  background: var(--gold-200);
-  flex-shrink: 0;
-}
-
-.brand-panel > p[data-slogan] em {
-  font-style: italic;
-  color: var(--gold-200);
-}
-
 .brand-copy h1 {
   margin: 0;
   font-family: var(--font-display);
   font-style: italic;
   line-height: .88;
   letter-spacing: -0.5px;
-  font-size: clamp(22px, 4.0vw, 64px);
+  font-size: clamp(20px, 3.8vw, 60px);
   text-shadow: 0 8px 24px rgba(0,0,0,.9);
 }
 
@@ -312,9 +266,9 @@
   overflow: visible;
   display: flex;
   flex-direction: column;
-  padding-top: 0;
-  justify-content: space-between;
-  gap: 0;
+  padding: 0.8% 0 0;
+  justify-content: flex-start;
+  gap: clamp(2px, 0.3vw, 5px);
 }
 
 .mission-kicker {
@@ -404,8 +358,8 @@
 
 .sub-progress-track {
   position: relative;
-  height: clamp(44px, 6.2vw, 100px);
-  border-radius: clamp(6px, 0.8vw, 14px);
+  height: clamp(40px, 5.5vw, 88px);
+  border-radius: clamp(6px, 0.8vw, 12px);
   border: 1.5px solid rgba(255,201,74,.55);
   overflow: hidden;
   background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(0,0,0,.65) 100%);
@@ -467,7 +421,7 @@
 
 .sub-progress-label strong {
   display: block;
-  font: 900 clamp(26px, 4.8vw, 80px)/.88 var(--font-display);
+  font: 900 clamp(24px, 4.2vw, 68px)/.88 var(--font-display);
   white-space: nowrap;
   color: #fff;
   text-shadow:
@@ -500,30 +454,33 @@
 /* ── Right column: next goal ── */
 .next-goal {
   border-left: 1px solid rgba(255,201,74,.28);
-  padding-left: clamp(6px, 0.8vw, 12px);
-  display: grid;
-  align-content: center;
-  gap: clamp(1px, 0.15vw, 3px);
+  padding-left: clamp(6px, 0.9vw, 14px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: clamp(2px, 0.2vw, 4px);
   text-transform: uppercase;
 }
 
 .next-goal span {
   color: var(--gold-100);
-  font: 700 clamp(8px, 1.0vw, 15px)/1 var(--font-display);
+  font: 700 clamp(7px, 0.9vw, 14px)/1 var(--font-display);
   letter-spacing: 1px;
 }
 
 .next-goal strong {
-  font: 900 clamp(24px, 3.8vw, 62px)/.90 var(--font-display);
+  font: 900 clamp(22px, 3.5vw, 56px)/.90 var(--font-display);
   background: linear-gradient(180deg, var(--gold-100), var(--gold-300));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  line-height: .9;
 }
 
 .next-goal em {
   color: rgba(255,255,255,.80);
-  font: italic 700 clamp(8px, 1.0vw, 15px)/1 var(--font-display);
+  font: italic 700 clamp(7px, 0.9vw, 14px)/1 var(--font-display);
 }
 
 /* ── Old progress-shell/track hidden (removed from HTML) ── */
@@ -532,15 +489,15 @@
 .progress-fill { display: none; }
 
 .cta-strip {
-  height: clamp(26px, 3.1vw, 50px);
-  margin: 0.6% 0.6% 0;
+  height: clamp(22px, 2.8vw, 44px);
+  margin: 0.4% 0.8% 0;
   display: grid;
-  grid-template-columns: clamp(28px, 2.8vw, 46px) 1fr clamp(24px, 2.4vw, 40px);
+  grid-template-columns: clamp(24px, 2.5vw, 40px) 1fr clamp(22px, 2.2vw, 36px);
   align-items: center;
   color: #fff;
   text-decoration: none;
   text-transform: uppercase;
-  font: italic 900 clamp(11px, 1.7vw, 26px)/1 var(--font-display);
+  font: italic 900 clamp(10px, 1.5vw, 22px)/1 var(--font-display);
   border: 1.5px solid var(--line-bright);
   clip-path: polygon(3.5% 0, 96.5% 0, 100% 50%, 96.5% 100%, 3.5% 100%, 0 50%);
   background: linear-gradient(90deg, rgba(255,196,42,.18), rgba(5,5,4,.80), rgba(255,196,42,.18));
@@ -557,22 +514,20 @@
 
 .achievement-panel {
   min-width: 0;
-  border-radius: clamp(8px, 1vw, 16px);
-  padding: clamp(4px, 0.6vw, 10px) clamp(4px, 0.6vw, 10px);
+  border-radius: clamp(6px, 0.8vw, 14px);
+  padding: clamp(4px, 0.6vw, 10px);
   align-self: stretch;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  justify-content: space-between;
-  width: 100%;
+  gap: clamp(2px, 0.3vw, 5px);
 }
 
 .achievement-title {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--gold-100);
   text-transform: uppercase;
   flex-shrink: 0;
@@ -580,24 +535,24 @@
 
 .achievement-title h3 {
   margin: 0;
-  font: italic 900 clamp(13px, 2.0vw, 32px)/1 var(--font-display);
+  font: italic 900 clamp(11px, 1.7vw, 26px)/1 var(--font-display);
   letter-spacing: 2px;
 }
 
 .badge-grid {
-  margin-top: 0.4%;
+  margin-top: 0;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: clamp(2px, 0.3vw, 5px);
   flex-shrink: 0;
-  width: 100%;
 }
 
 .badge {
-  display: grid;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: clamp(1px, 0.2vw, 3px);
-  opacity: .40;
+  opacity: .42;
   animation: badgePop .5s both;
 }
 
@@ -606,9 +561,9 @@
 }
 
 .badge svg {
-  width: clamp(22px, 3.5vw, 56px);
+  width: clamp(20px, 3.0vw, 48px);
   height: auto;
-  filter: drop-shadow(0 0 8px rgba(255,196,42,.38));
+  filter: drop-shadow(0 0 6px rgba(255,196,42,.35));
 }
 
 .badge path {
@@ -635,7 +590,7 @@
 }
 
 .badge strong {
-  font: 900 clamp(9px, 1.4vw, 22px)/.88 var(--font-display);
+  font: 900 clamp(8px, 1.2vw, 18px)/.90 var(--font-display);
   white-space: nowrap;
   color: var(--gold-100);
 }
@@ -645,9 +600,9 @@
   overflow: hidden;
   text-align: center;
   white-space: nowrap;
-  font: 600 clamp(5px, 0.62vw, 10px)/1 var(--font-display);
+  font: 600 clamp(5px, 0.52vw, 8px)/1.1 var(--font-display);
   text-transform: uppercase;
-  color: rgba(255,255,255,.70);
+  color: rgba(255,255,255,.65);
 }
 
 /* ── Social block (replaces manifesto text) ── */
@@ -656,15 +611,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: clamp(3px, 0.4vw, 8px);
-  padding: 0 0.4% 0.3%;
-  width: 100%;
+  justify-content: center;
+  gap: clamp(3px, 0.4vw, 7px);
+  padding-top: 0.2%;
+}
 }
 
 .social-label {
   color: var(--gold-100);
-  font: italic 700 clamp(7px, 0.85vw, 13px)/1 var(--font-display);
+  font: italic 700 clamp(8px, 0.9vw, 14px)/1 var(--font-display);
   text-transform: uppercase;
   letter-spacing: 2px;
   margin: 0;
@@ -674,9 +629,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(4px, 0.7vw, 14px);
-  flex-wrap: nowrap;
-  width: 100%;
+  gap: clamp(6px, 0.9vw, 18px);
+  flex-wrap: wrap;
 }
 
 .social-icon {
@@ -691,7 +645,6 @@
   transition: background 0.2s, border-color 0.2s;
   text-decoration: none;
   box-shadow: 0 0 8px rgba(255,196,42,.15);
-  flex-shrink: 0;
 }
 
 .social-icon:hover {
@@ -700,8 +653,8 @@
 }
 
 .social-icon svg {
-  width: clamp(10px, 1.4vw, 22px);
-  height: clamp(10px, 1.4vw, 22px);
+  width: clamp(12px, 1.6vw, 26px);
+  height: clamp(12px, 1.6vw, 26px);
   fill: rgba(255,255,255,.85);
 }
 
@@ -710,26 +663,25 @@
 .manifesto  { display: none; }
 
 .feature-strip {
-  grid-column: 1 / -1;
+  grid-column: 2 / 3;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  gap: 0;
+  gap: clamp(2px, 0.3vw, 6px);
   min-width: 0;
-  padding: 0 0.5%;
-  border-top: 1px solid rgba(255,201,74,.18);
+  padding: 0.15% 0;
 }
 
 .feature-strip span {
   display: grid;
-  grid-template-columns: clamp(14px, 1.6vw, 24px) 1fr;
+  grid-template-columns: clamp(12px, 1.4vw, 22px) 1fr;
   align-items: center;
-  gap: clamp(3px, 0.4vw, 7px);
-  color: rgba(255,255,255,.92);
-  font: 700 clamp(7px, 0.78vw, 12px)/1.1 var(--font-display);
+  gap: clamp(2px, 0.35vw, 6px);
+  color: rgba(255,255,255,.88);
+  font: 700 clamp(6px, 0.72vw, 11px)/1.1 var(--font-display);
   text-transform: uppercase;
-  border-right: 1px solid rgba(255,255,255,.14);
-  padding-right: clamp(3px, 0.4vw, 6px);
+  border-right: 1px solid rgba(255,255,255,.12);
+  padding-right: clamp(2px, 0.3vw, 5px);
   overflow: hidden;
 }
 
@@ -738,33 +690,33 @@
 }
 
 .feature-strip svg {
-  width: clamp(13px, 1.5vw, 22px);
-  height: clamp(13px, 1.5vw, 22px);
+  width: clamp(12px, 1.4vw, 20px);
+  height: clamp(12px, 1.4vw, 20px);
   fill: var(--gold-200);
-  filter: drop-shadow(0 0 4px rgba(255,196,42,.50));
+  filter: drop-shadow(0 0 3px rgba(255,196,42,.45));
   flex-shrink: 0;
 }
 
 @media (max-width: 1200px) {
   .safe-area {
-    grid-template-columns: 30% 38% 32%;
-    gap: 0 0.8%;
-    padding: 0.6% 0.5% 0.4%;
+    grid-template-columns: 28% 40% 32%;
+    gap: 0 0.6%;
+    padding: 1.0% 0.7% 0.4%;
   }
-  .brand-panel { gap: clamp(4px, 0.5vw, 10px); }
-  .achievement-panel { padding: 0.8% 0.6%; }
+  .brand-panel { grid-template-columns: clamp(70px, 8.0vw, 130px) 1fr; }
+  .achievement-panel { padding: 0.6% 0.5%; }
   .manifesto { display: none; }
   .social-row { display: none; }
 }
 
 @media (max-width: 900px) {
   .safe-area {
-    grid-template-columns: 30% 38% 32%;
-    padding: 0.5% 0.4% 0.3%;
-    gap: 0 0.5%;
+    grid-template-columns: 28% 40% 32%;
+    padding: 0.8% 0.5% 0.4%;
+    gap: 0 0.4%;
   }
   .subscriber-card { grid-template-columns: 1fr clamp(60px, 7.5vw, 110px); }
   .achievement-panel { align-self: stretch; }
-  .feature-strip { grid-column: 1 / -1; }
+  .feature-strip { grid-column: 2 / 3; }
   .manifesto, .social-row { display: none; }
 }
