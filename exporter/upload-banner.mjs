@@ -422,6 +422,27 @@ async function uploadViaOAuth() {
 
   // Step 3: Apply banner to channel
   console.log("📺 正在将 Banner 应用到频道...");
+
+  // Get channel ID if not configured
+  let channelId = CHANNEL_ID;
+  if (!channelId) {
+    console.log("  YOUTUBE_CHANNEL_ID 未设置，自动获取频道 ID...");
+    const chRes = await fetch(
+      "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
+      { headers: { "Authorization": `Bearer ${ACCESS_TOKEN}` } }
+    );
+    const chData = await chRes.json();
+    channelId = chData.items?.[0]?.id;
+    if (!channelId) {
+      console.error("❌ 无法获取频道 ID，请在 .env 中设置 YOUTUBE_CHANNEL_ID");
+      process.exit(1);
+    }
+    console.log("  ✓ 自动获取频道 ID：", channelId);
+  }
+
+  console.log("  频道 ID：", channelId);
+  console.log("  Banner URL：", bannerUrl);
+
   const applyRes = await fetch(
     "https://www.googleapis.com/youtube/v3/channels?part=brandingSettings",
     {
@@ -431,8 +452,10 @@ async function uploadViaOAuth() {
         "Content-Type":  "application/json",
       },
       body: JSON.stringify({
-        id: CHANNEL_ID,
-        brandingSettings: { image: { bannerExternalUrl: bannerUrl } },
+        id: channelId,
+        brandingSettings: {
+          image: { bannerExternalUrl: bannerUrl },
+        },
       }),
     }
   );
@@ -444,5 +467,5 @@ async function uploadViaOAuth() {
   }
 
   console.log("✅ 频道 Banner 已成功更新（OAuth API 模式）");
-  console.log("   频道 ID：", CHANNEL_ID);
+  console.log("   频道 ID：", channelId);
 }
