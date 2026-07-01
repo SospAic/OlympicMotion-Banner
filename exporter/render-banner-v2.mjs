@@ -47,25 +47,33 @@ const meta = await sharp(BG).metadata();
 const BW = meta.width  ?? 1983;
 const BH = meta.height ?? 793;
 
-// ── COORDINATE MAP (1983×793) — calibrated from overlay image ────────────
-// Progress bar slot (dark rounded area in background)
+// ── COORDINATE MAP (1983×793) — verified from annotated screenshot ───────
+// Green box = progress bar track
 const PB = {
   x: 537,   // left edge
-  y: 378,   // top edge (cyan test box matched best)
-  w: 413,   // width
-  h: 52,    // height
-  r: 8,     // corner radius
+  y: 373,   // top edge
+  w: 412,   // width
+  h: 54,    // height
+  r: 8,
 };
 
-// Badge row — 7 badges, Badge-row box: x=712 y=115 w=1175 h=95
-// Each badge center: x0=712+(48/2)=736, step=1175/7≈168
+// Blue box = "TO GO!" number area (next-goal distance)
+const NG = {
+  x: 963,   // left edge
+  y: 360,   // top edge
+  w: 148,   // width
+  h: 85,    // height
+};
+
+// Red box = achievements badge row
+// 7 badges, row starts at x≈712, width≈1175
 const BADGE_ROW = {
-  x0:    736,    // center of first badge
-  y:      162,   // vertical center (y=115 + 95/2 ≈ 162)
-  step:   168,   // 1175 / 7
-  size:    50,   // icon size
-  labelY: 208,   // label below icon
-  captY:  223,   // caption below label
+  x0:    796,    // center of first badge (712 + 1175/7/2 ≈ 796)
+  y:      162,   // vertical center (y=115 + 95/2)
+  step:   168,   // 1175/7
+  size:    50,
+  labelY: 208,
+  captY:  223,
 };
 
 // ── Build SVG overlay ─────────────────────────────────────────────────────
@@ -114,6 +122,12 @@ function badgeSVG(b, i) {
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BW}" height="${BH}">
 <defs>
+  <linearGradient id="pgrd" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0"    stop-color="#fffae8"/>
+    <stop offset="0.20" stop-color="#ffd95a"/>
+    <stop offset="0.55" stop-color="#ffc233"/>
+    <stop offset="1"    stop-color="#a85f00"/>
+  </linearGradient>
   <linearGradient id="gld" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0"    stop-color="#fffae8"/>
     <stop offset="0.15" stop-color="#ffd95a"/>
@@ -121,47 +135,38 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BW}" height="${BH}
     <stop offset="0.72" stop-color="#f5a615"/>
     <stop offset="1"    stop-color="#a85f00"/>
   </linearGradient>
-  <linearGradient id="pgrd" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0"    stop-color="#fffae8"/>
-    <stop offset="0.2"  stop-color="#ffd95a"/>
-    <stop offset="0.55" stop-color="#ffc233"/>
-    <stop offset="1"    stop-color="#a85f00"/>
-  </linearGradient>
+  <filter id="shadow">
+    <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="rgba(0,0,0,0.95)"/>
+  </filter>
   <filter id="glow">
     <feGaussianBlur stdDeviation="3" result="b"/>
     <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  <filter id="shadow">
-    <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.90)"/>
   </filter>
   <clipPath id="pbClip">
     <rect x="${PB.x}" y="${PB.y}" width="${PB.w}" height="${PB.h}" rx="${PB.r}"/>
   </clipPath>
 </defs>
 
-<!-- ── PROGRESS BAR fill ── -->
+<!-- ── PROGRESS BAR: gold fill to pctToNext% ── -->
 <rect x="${PB.x}" y="${PB.y}" width="${fillW}" height="${PB.h}" rx="${PB.r}"
   fill="url(#pgrd)" clip-path="url(#pbClip)"/>
-
-<!-- Progress bar shimmer stripes -->
-<g clip-path="url(#pbClip)" opacity="0.15">
-  ${Array.from({length: 22}, (_, i) =>
-    `<rect x="${PB.x + i*20}" y="${PB.y}" width="10" height="${PB.h}" fill="white" transform="skewX(-12)"/>`
-  ).join("")}
+<!-- shimmer stripes on fill -->
+<g clip-path="url(#pbClip)" opacity="0.14">
+  ${Array.from({length:24},(_,i)=>`<rect x="${PB.x+i*19}" y="${PB.y}" width="9" height="${PB.h}" fill="white" transform="skewX(-14)"/>`).join("")}
 </g>
 
-<!-- ── SUBSCRIBER NUMBER centered in bar ── -->
-<text x="${PB.x + PB.w * 0.42}" y="${PB.y + PB.h * 0.65}"
+<!-- ── SUBSCRIBER NUMBER centered in progress bar ── -->
+<text x="${PB.x + PB.w * 0.5}" y="${PB.y + PB.h * 0.72}"
   text-anchor="middle"
   font-family="Arial Black,Impact,sans-serif" font-weight="900"
-  font-size="36" fill="white" filter="url(#shadow)"
+  font-size="34" fill="white" filter="url(#shadow)"
   letter-spacing="-1">${fmtPlain(subs)}</text>
 
-<!-- ── PERCENTAGE right side of bar ── -->
-<text x="${PB.x + PB.w - 8}" y="${PB.y + PB.h * 0.66}"
-  text-anchor="end"
-  font-family="Arial Black,sans-serif" font-weight="900"
-  font-size="22" fill="white" filter="url(#shadow)">${pctToNext.toFixed(1)}%</text>
+<!-- ── TO GO number in blue box area ── -->
+<text x="${NG.x + NG.w * 0.5}" y="${NG.y + NG.h * 0.52}"
+  text-anchor="middle"
+  font-family="Arial Black,Impact,sans-serif" font-weight="900"
+  font-size="32" fill="url(#gld)" filter="url(#glow)">${fmtPlain(toGo)}</text>
 
 <!-- ── BADGES ── -->
 ${badges.map(badgeSVG).join("\n")}

@@ -166,9 +166,7 @@ await page.waitForTimeout(500);
 await page.screenshot({ path: OUTPUT, fullPage: false, clip: { x:0, y:0, width:SAFE_W, height:SAFE_H } });
 console.log(`✓ Banner preview (${SAFE_W}×${SAFE_H}) → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
 
-// Step 2: Resize viewport to 2560×1440 and place banner centered for YouTube upload
-// Do NOT scale the content — place it centered as-is
-// YouTube safe-area is center 1546px of the 2560px width
+// Step 2: Resize viewport to 2560×1440, banner fills full width
 await page.setViewportSize({ width: 2560, height: 1440 });
 await page.addStyleTag({ content: `
   body, html { margin:0; padding:0; background:#000; width:2560px; height:1440px; overflow:hidden; }
@@ -181,14 +179,14 @@ await page.addStyleTag({ content: `
   .banner-stage {
     position: absolute !important;
     top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    width: ${SAFE_W}px !important;
+    left: 0 !important;
+    transform: translateY(-50%) !important;
+    width: 2560px !important;
     height: ${SAFE_H}px !important;
     max-height: unset !important;
   }
   .safe-area {
-    width: ${SAFE_W}px !important;
+    width: 2560px !important;
     height: ${SAFE_H}px !important;
     transform: none !important;
   }
