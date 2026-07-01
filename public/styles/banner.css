@@ -319,8 +319,9 @@ youtube-canvas {
   display: flex;
   flex-direction: column;
   padding: 0.4% 0.3% 0;
-  justify-content: space-between;
-  gap: clamp(2px, 0.3vw, 5px);
+  justify-content: center;
+  gap: clamp(3px, 0.4vw, 6px);
+  align-items: center;
 }
 
 .mission-kicker {
@@ -389,6 +390,7 @@ youtube-canvas {
   align-items: center;
   gap: 0 clamp(6px, 0.8vw, 14px);
   overflow: hidden;
+  width: 100%;
 }
 
 .subscriber-card::before {
@@ -537,7 +539,8 @@ youtube-canvas {
 
 .cta-strip {
   height: clamp(26px, 3.1vw, 50px);
-  margin: 0.6% 0.6% 0;
+  margin: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: clamp(28px, 2.8vw, 46px) 1fr clamp(24px, 2.4vw, 40px);
   align-items: center;
@@ -568,7 +571,7 @@ youtube-canvas {
   display: flex;
   flex-direction: column;
   gap: clamp(2px, 0.3vw, 5px);
-  justify-content: space-between;
+  justify-content: center;
   width: 100%;
 }
 
@@ -602,7 +605,7 @@ youtube-canvas {
   justify-items: center;
   gap: clamp(1px, 0.2vw, 3px);
   opacity: .40;
-  animation: badgePop .5s both;
+  animation: badgePop .3s both;
 }
 
 .badge.is-unlocked {

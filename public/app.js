@@ -130,7 +130,7 @@ function paintSocialIcons(social) {
 function makeBadge(item, i) {
   const el = document.createElement("div");
   el.className = `badge${item.unlocked ? " is-unlocked" : ""}`;
-  el.style.animationDelay = `${i * 65}ms`;
+  el.style.animationDelay = `${i * 30}ms`;
   el.innerHTML = `
     <svg viewBox="0 0 64 76" aria-hidden="true">
       <defs>

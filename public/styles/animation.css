@@ -51,9 +51,8 @@
 
 /* ── Subscriber number flash on load ── */
 @keyframes numFlash {
-  0%   { opacity: .4; }
-  60%  { opacity: 1; color: var(--gold-100);
-         text-shadow: 0 0 28px rgba(255,196,42,.85); }
+  0%   { opacity: 1; }
+  30%  { color: var(--gold-100); text-shadow: 0 0 28px rgba(255,196,42,.85); }
   100% { opacity: 1; }
 }
 

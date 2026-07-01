@@ -122,10 +122,8 @@ try {
 }
 
 // Extra wait for CSS animations, font rendering and badge pop-in animations
-// badgePop animation is 0.5s with delays up to 65ms * 6 = ~0.9s total
-// numFlash animation is 1.2s
-// ringPulse, goldSweep etc need to complete at least one cycle
-await page.waitForTimeout(5000);
+// badgePop: 0.5s × 7 badges + delays; numFlash: 1.2s; ringPulse needs 1 cycle
+await page.waitForTimeout(4000);
 
 if (pageErrors.length) {
   console.warn("Non-fatal page errors:", pageErrors);
