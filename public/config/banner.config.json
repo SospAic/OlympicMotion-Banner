@@ -17,45 +17,85 @@
     "targetLabel": "Target"
   },
   "data": {
-    "subs": 84
+    "subs": 4564674
   },
   "v2Layout": {
     "_comment": "background.png 原始尺寸 1983x793，所有坐标基于此尺寸",
     "_tip": "修改后运行: node exporter/render-banner-v2.mjs 查看效果",
     "progressBar": {
       "_comment": "绿色框 — 进度条轨道，金色填充表示当前订阅数完成百分比",
-      "x": 537,
-      "y": 373,
-      "w": 412,
-      "h": 54,
+      "x": 725,
+      "y": 329,
+      "w": 530,
+      "h": 117,
       "cornerRadius": 8,
+      "fillCornerRadius": 12,
+      "fillStyle": {
+        "_comment": "进度条样式：gradient=金色渐变+光效, solid=纯色, glow=发光",
+        "type": "gradient",
+        "colors": ["#fffae8", "#ffd95a", "#ffc233", "#f5a615", "#a85f00"],
+        "shimmerOpacity": 0.18,
+        "glowColor": "rgba(255,200,50,0.55)",
+        "glowBlur": 8
+      },
       "subsNumber": {
         "_comment": "订阅数显示在进度条正中央，offsetX/Y 是相对进度条宽高的比例 0~1",
         "offsetX": 0.5,
-        "offsetY": 0.72,
-        "fontSize": 34
+        "offsetY": 0.7,
+        "fontSize": 70,
+        "color": "#ffffff",
+        "fontFamily": "Arial Black,Impact,sans-serif",
+        "fontWeight": "900",
+        "letterSpacing": -2,
+        "shadowBlur": 6
       }
     },
     "toGoBox": {
       "_comment": "蓝色框 — 当前订阅数距离最近档位还差多少",
-      "x": 963,
-      "y": 360,
-      "w": 148,
-      "h": 85,
+      "x": 1276,
+      "y": 323,
+      "w": 118,
+      "h": 78,
       "numberOffsetX": 0.5,
-      "numberOffsetY": 0.52,
-      "fontSize": 32
+      "numberOffsetY": 0.85,
+      "fontSize": 80,
+      "autoShrink": true,
+      "_autoShrink_comment": "true=字数越多自动缩小字体防越界，false=固定字号",
+      "maxFontSize": 80,
+      "minFontSize": 22,
+      "useCompactFormat": true,
+      "_compact_comment": "true=超过5位数字自动转为 1.2M / 34.5K 格式",
+      "compactThreshold": 99999,
+      "color": "#ffc94a",
+      "fontFamily": "Arial Black,Impact,sans-serif",
+      "fontWeight": "900"
     },
     "badgeRow": {
       "_comment": "红色框 — 7个成就徽章，x0是第一个徽章中心x坐标，step是相邻徽章间距",
-      "x0": 796,
-      "y": 162,
-      "step": 168,
-      "size": 50,
-      "labelY": 208,
-      "captionY": 223,
+      "x0": 1481,
+      "y": 223,
+      "step": 71,
+      "size": 60,
+      "labelY": 244,
+      "captionY": 254,
       "labelFontSize": 13,
-      "captionFontSize": 9
+      "captionFontSize": 9,
+      "labelColor": "#ffc94a",
+      "captionColor": "rgba(255,255,255,0.70)",
+      "lockedOpacity": 0.55,
+      "lockedLabelColor": "rgba(255,201,74,0.55)",
+      "lockedCaptionColor": "rgba(255,255,255,0.40)",
+      "checkmark": {
+        "_comment": "解锁徽章内对号的位置，相对徽章中心的偏移比例",
+        "offsetX": -0.32,
+        "offsetY": 0,
+        "scaleX": 0.28,
+        "scaleY": 0.28,
+        "armX": 0.62,
+        "armY": -0.78,
+        "strokeColor": "#1a1200",
+        "strokeWidthRatio": 0.10
+      }
     }
   },
   "social": {
