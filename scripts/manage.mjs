@@ -79,9 +79,9 @@ async function run(cmd, args = [], opts = {}) {
   });
 }
 
-async function runScript(script) {
+async function runScript(script, ...args) {
   const nodeBin = process.execPath;
-  return run(nodeBin, [script]);
+  return run(nodeBin, [script, ...args]);
 }
 
 // ── Status check ──────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ async function menuGenerate() {
   const c = (await ask("  请选择：")).trim();
   switch (c) {
     case "1":
-      console.log(); await runScript("run.mjs --no-upload --v2");
+      console.log(); await runScript("run.mjs", "--no-upload", "--v2");
       break;
     case "2": {
       const subs = await ask("  输入订阅数：");
@@ -308,7 +308,7 @@ async function menuGenerate() {
       break;
     }
     case "3":
-      console.log(); await runScript("run.mjs --no-upload");
+      console.log(); await runScript("run.mjs", "--no-upload");
       break;
     case "4": {
       const subs = await ask("  输入订阅数：");
