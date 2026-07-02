@@ -259,20 +259,24 @@ await sharp(BG)
 console.log(`✓ Banner v2 (${BW}×${BH}) → dist/banner-v2.png`);
 
 // ── Full 2560×1440 for YouTube ────────────────────────────────────────────
-const ratio    = BH / BW;
-const FULL_W   = 2560;
-const FULL_H   = 1440;
-const BANNER_H = Math.round(FULL_W * ratio);
-const TOP_Y    = Math.round((FULL_H - BANNER_H) / 2);
+// YouTube safe-area (visible on desktop): center 2560×423 strip of the 2560×1440 canvas.
+// Strategy: scale banner to fill exactly 2560×423, place at vertical center of 1440px canvas.
+// This ensures desktop/tablet/mobile all show the content correctly.
+const FULL_W    = 2560;
+const FULL_H    = 1440;
+const SAFE_H    = 423;                              // YouTube desktop safe-area height
+const TOP_Y     = Math.round((FULL_H - SAFE_H) / 2); // = 508 — centered vertically
+
+// Scale banner to exactly 2560×423 (fill safe-area, ignore original aspect ratio)
+const scaledBuf = await sharp(OUTPUT)
+  .resize(FULL_W, SAFE_H, { fit: "fill" })
+  .toBuffer();
 
 await sharp({
   create: { width: FULL_W, height: FULL_H, channels: 4,
             background: { r:0, g:0, b:0, alpha:1 } }
-}).composite([{
-  input: await sharp(OUTPUT).resize(FULL_W, BANNER_H).toBuffer(),
-  top: TOP_Y, left: 0,
-}])
-.png({ quality: 95 })
-.toFile(FULL);
+}).composite([{ input: scaledBuf, top: TOP_Y, left: 0 }])
+  .png({ quality: 95 })
+  .toFile(FULL);
 
-console.log(`✓ Full banner (${FULL_W}×${FULL_H}) → dist/banner-v2-full.png`);
+console.log(`✓ Full banner (${FULL_W}×${FULL_H}, safe-area at y=${TOP_Y}~${TOP_Y+SAFE_H}) → dist/banner-v2-full.png`);
