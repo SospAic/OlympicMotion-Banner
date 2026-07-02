@@ -117,6 +117,8 @@ const NG = {
 
 const BADGE_ROW = {
   count: BRcfg.count      ?? (CONFIG.achievements?.length ?? 7),  // total badges to display
+  showLabel:   BRcfg.showLabel   ?? false,   // show milestone label (e.g. "1M") below badge
+  showCaption: BRcfg.showCaption ?? false,   // show caption (e.g. "SUBSCRIBERS") below label
   x0:    BRcfg.x0        ?? 796,
   y:     BRcfg.y         ?? 162,
   step:  BRcfg.step      ?? 168,
@@ -189,12 +191,12 @@ function badgeSVG(b, i) {
       <path d="M${cx+r*ck.ox} ${cy+r*ck.oy} l${r*ck.sx} ${r*ck.sy} l${r*ck.ax} ${r*ck.ay}"
         fill="none" stroke="${ck.color}" stroke-width="${sz*ck.wRatio}"
         stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
+      ${BADGE_ROW.showLabel ? `<text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
         font-family="Arial Black,Impact,sans-serif" font-weight="900"
-        font-size="${BADGE_ROW.lblFS}" fill="${BADGE_ROW.lblColor}">${b.label}</text>
-      <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
+        font-size="${BADGE_ROW.lblFS}" fill="${BADGE_ROW.lblColor}">${b.label}</text>` : ""}
+      ${BADGE_ROW.showCaption ? `<text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
         font-family="Arial,sans-serif" font-size="${BADGE_ROW.capFS}"
-        fill="${BADGE_ROW.capColor}">SUBSCRIBERS</text>
+        fill="${BADGE_ROW.capColor}">SUBSCRIBERS</text>` : ""}
     </g>`;
 }
 

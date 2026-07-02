@@ -17,7 +17,7 @@
     "targetLabel": "Target"
   },
   "data": {
-    "subs": 500001
+    "subs": 99999999
   },
   "v2Layout": {
     "_comment": "bg.png 原始尺寸 1642x923 (YouTube Full Banner)，所有坐标基于此尺寸",
@@ -69,13 +69,15 @@
     },
     "badgeRow": {
       "_comment": "成就徽章行，count=显示徽章总数（自动截取 achievements 前 count 个）",
-      "count": 8,
+      "count": 7,
+      "showLabel": false,
+      "showCaption": false,
       "x0": 656,
       "y": 437,
-      "step": 68,
+      "step": 58,
       "size": 39,
-      "labelY": 516,
-      "captionY": 527,
+      "labelY": 467,
+      "captionY": 477,
       "labelFontSize": 11,
       "captionFontSize": 8,
       "labelColor": "#ffc94a",

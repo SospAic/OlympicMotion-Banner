@@ -129,10 +129,12 @@ function paintSocialIcons(social) {
   container.replaceChildren(...links);
 }
 
-function makeBadge(item, i) {
+function makeBadge(item, i, cfg) {
   const el = document.createElement("div");
   el.className = `badge${item.unlocked ? " is-unlocked" : ""}`;
   el.style.animationDelay = `${i * 30}ms`;
+  const showLabel   = cfg?.v2Layout?.badgeRow?.showLabel   ?? false;
+  const showCaption = cfg?.v2Layout?.badgeRow?.showCaption ?? false;
   el.innerHTML = `
     <svg viewBox="0 0 64 76" aria-hidden="true">
       <defs>
@@ -153,8 +155,8 @@ function makeBadge(item, i) {
                   fill="rgba(255,255,255,.70)" stroke="none"/>`
       }
     </svg>
-    <strong>${item.label}</strong>
-    <span>${item.caption}</span>`;
+    ${showLabel   ? `<strong>${item.label}</strong>`   : ""}
+    ${showCaption ? `<span>${item.caption}</span>` : ""}`;
   return el;
 }
 
@@ -227,7 +229,7 @@ function paint(cfg) {
   const grid = document.querySelector("[data-achievements]");
   if (grid) {
     const displayBadges = state.achievements.slice(0, badgeCount);
-    grid.replaceChildren(...displayBadges.map(makeBadge));
+    grid.replaceChildren(...displayBadges.map((b, i) => makeBadge(b, i, cfg)));
   }
 
   // Social icons
