@@ -32,23 +32,39 @@ if (!existsSync(BG)) {
 // ── Data ──────────────────────────────────────────────────────────────────
 const subs       = Number(CONFIG.data?.subs ?? 0);
 const goal       = Number(CONFIG.mission?.goal ?? 1000000);
-const milestones = (CONFIG.achievements ?? []).map(a => Number(a.threshold));
+
+// Sort milestones ascending — never mutate the original array
+const milestones = (CONFIG.achievements ?? [])
+  .map(a => Number(a.threshold))
+  .sort((a, b) => a - b);
+
 const maxMilestone = Math.max(...milestones, goal);
 const goalReached  = subs >= maxMilestone;
-const autoNext   = goalReached ? maxMilestone : (milestones.find(t => t > subs) ?? goal);
-const prevMile   = goalReached ? milestones[milestones.length - 1] ?? 0
-                               : ([...milestones].reverse().find(t => t <= subs) ?? 0);
-const segSize    = Math.max(1, autoNext - prevMile);
-const pctToNext  = goalReached ? 100
-                               : Math.min(100, segSize > 0 ? ((subs - prevMile) / segSize) * 100 : 100);
-const toGo       = goalReached ? 0 : Math.max(0, autoNext - subs);
+
+// Next milestone above subs (or goal as fallback)
+const autoNext = goalReached
+  ? maxMilestone
+  : (milestones.find(t => t > subs) ?? goal);
+
+// Previous milestone ≤ subs (highest one already reached, 0 if none)
+// Use a non-mutating filter+last approach
+const prevMile = goalReached
+  ? milestones[milestones.length - 1] ?? 0
+  : (milestones.filter(t => t <= subs).pop() ?? 0);
+
+// When subs exactly equals a milestone, that segment is just starting (0%)
+// so prevMile = subs, segSize = autoNext - subs → correct 0% for new segment
+const segSize   = Math.max(1, autoNext - prevMile);
+const rawPct    = goalReached ? 100 : ((subs - prevMile) / segSize) * 100;
+const pctToNext = Math.min(100, Math.max(0, rawPct));
+const toGo      = goalReached ? 0 : Math.max(0, autoNext - subs);
 
 const fmtPlain = n => new Intl.NumberFormat("en-US", { useGrouping: false }).format(n);
 const compact  = n => n >= 1000000 ? (n/1000000).toFixed(0)+"M"
                     : n >= 1000    ? (n/1000).toFixed(0)+"K"
                     : String(n);
 
-console.log(`Subs: ${subs} | Next: ${compact(autoNext)} | Prev: ${compact(prevMile)} | Pct: ${pctToNext.toFixed(1)}% | GoalReached: ${goalReached}`);
+console.log(`Subs: ${subs} | Next: ${compact(autoNext)} | Prev: ${compact(prevMile)} | Seg: ${compact(segSize)} | Pct: ${pctToNext.toFixed(2)}% | ToGo: ${toGo} | GoalReached: ${goalReached}`);
 
 // ── Background dimensions ─────────────────────────────────────────────────
 const meta = await sharp(BG).metadata();
