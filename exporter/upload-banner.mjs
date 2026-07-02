@@ -445,11 +445,16 @@ async function uploadViaOAuth() {
 
   // First GET current channel branding to preserve existing settings
   const getRes  = await fetch(
-    `https://www.googleapis.com/youtube/v3/channels?part=brandingSettings&id=${channelId}`,
+    `https://www.googleapis.com/youtube/v3/channels?part=brandingSettings,snippet&id=${channelId}`,
     { headers: { "Authorization": `Bearer ${ACCESS_TOKEN}` } }
   );
   const getData = await getRes.json();
-  const existing = getData.items?.[0]?.brandingSettings ?? {};
+  const existingItem = getData.items?.[0] ?? {};
+  const existing = existingItem.brandingSettings ?? {};
+  const snippet  = existingItem.snippet ?? {};
+
+  // brandingSettings.channel.title is REQUIRED by the API
+  const channelTitle = existing?.channel?.title ?? snippet?.title ?? "OlympicMotion";
 
   const applyRes = await fetch(
     "https://www.googleapis.com/youtube/v3/channels?part=brandingSettings",
@@ -463,6 +468,10 @@ async function uploadViaOAuth() {
         id: channelId,
         brandingSettings: {
           ...existing,
+          channel: {
+            ...(existing.channel ?? {}),
+            title: channelTitle,   // required field
+          },
           image: {
             ...(existing.image ?? {}),
             bannerExternalUrl: bannerUrl,
