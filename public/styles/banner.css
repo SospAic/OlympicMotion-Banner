@@ -143,9 +143,9 @@ youtube-canvas {
   align-items: center;
   justify-content: center;
   min-width: 0;
-  overflow: hidden;
-  padding: 0.4% 0.5%;
-  gap: clamp(3px, 0.4vw, 8px);
+  overflow: visible;
+  padding: 0.3% 0.5%;
+  gap: clamp(2px, 0.28vw, 5px);
   align-self: stretch;
 }
 
@@ -248,9 +248,9 @@ youtube-canvas {
   margin: 0;
   font-family: var(--font-display);
   font-style: italic;
-  line-height: .88;
+  line-height: .82;
   letter-spacing: -0.5px;
-  font-size: clamp(20px, 3.8vw, 60px);
+  font-size: clamp(18px, 3.4vw, 54px);
   text-shadow: 0 8px 24px rgba(0,0,0,.9);
   overflow: hidden;
   text-align: center;
@@ -276,14 +276,15 @@ youtube-canvas {
 }
 
 .brand-copy p {
-  margin: clamp(4px, 0.6vw, 10px) 0 0;
+  margin: clamp(2px, 0.3vw, 6px) 0 0;
   color: #fff;
-  font: italic 800 clamp(9px, 1.15vw, 18px)/1 var(--font-display);
+  font: italic 800 clamp(8px, 0.95vw, 15px)/1 var(--font-display);
   text-transform: uppercase;
   letter-spacing: 1px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .brand-copy p::before {
