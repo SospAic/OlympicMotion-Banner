@@ -101,29 +101,33 @@ await page.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
 
 // Wait for the app.js module to finish painting
 // data-subs is set by app.js after config loads — wait for it to have real content
+// Also accept static placeholder "00,000" which means app.js parsed but config failed
 try {
   await page.waitForFunction(
     () => {
       const el = document.querySelector("[data-subs]");
-      // Accept any non-empty value (config may fall back to defaults)
-      return el && el.textContent.trim().length > 0;
+      if (!el) return false;
+      const txt = el.textContent.trim();
+      // Accept any non-empty string (static placeholder OR live number)
+      return txt.length > 0;
     },
-    { timeout: 15_000 }
+    { timeout: 20_000 }
   );
 } catch {
-  // If we can't confirm, take a debug screenshot and log what's there
+  // Even on timeout, continue and take a debug screenshot but don't abort
   const debugPath = OUTPUT.replace(".png", "-debug.png");
   await page.screenshot({ path: debugPath, fullPage: false });
   console.log(`Debug screenshot saved: ${debugPath}`);
   console.log("Page title:", await page.title());
-  console.log("HTML preview:", (await page.content()).substring(0, 800));
+  console.log("HTML preview:", (await page.content()).substring(0, 1200));
   if (pageErrors.length) console.log("Page errors:", pageErrors);
-  throw new Error("app.js did not finish painting within 15s — see debug screenshot");
+  // Continue anyway — static HTML has the banner structure
+  console.warn("⚠  app.js paint timeout — using static HTML state");
 }
 
 // Extra wait for CSS animations, font rendering and badge pop-in animations
-// badgePop: 0.5s × 7 badges + delays; numFlash: 1.2s; ringPulse needs 1 cycle
-await page.waitForTimeout(4000);
+// Increased to 6s to ensure all animations complete (ringPulse, badgePop, goldSweep)
+await page.waitForTimeout(6000);
 
 if (pageErrors.length) {
   console.warn("Non-fatal page errors:", pageErrors);
@@ -166,40 +170,54 @@ await page.waitForTimeout(500);
 await page.screenshot({ path: OUTPUT, fullPage: false, clip: { x:0, y:0, width:SAFE_W, height:SAFE_H } });
 console.log(`✓ Banner preview (${SAFE_W}×${SAFE_H}) → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
 
-// Step 2: Resize viewport to 2560×1440, banner fills full width
-await page.setViewportSize({ width: 2560, height: 1440 });
-await page.addStyleTag({ content: `
-  body, html { margin:0; padding:0; background:#000; width:2560px; height:1440px; overflow:hidden; }
-  .youtube-canvas {
-    width: 2560px !important; height: 1440px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-  .banner-stage {
-    position: absolute !important;
-    top: 50% !important;
-    left: 0 !important;
-    transform: translateY(-50%) !important;
-    width: 2560px !important;
-    height: ${SAFE_H}px !important;
-    max-height: unset !important;
-  }
-  .safe-area {
-    width: 2560px !important;
-    height: ${SAFE_H}px !important;
-    transform: none !important;
-  }
-` });
-await page.waitForTimeout(500);
+// Step 2: Generate 2560×1440 full banner using scale factor
+// Instead of resizing viewport (which breaks vw-based layout),
+// use deviceScaleFactor to scale the 1546-wide layout up to 2560.
+const FULL_W    = 2560;
+const FULL_H    = 1440;
+const SCALE     = FULL_W / SAFE_W;   // 2560 / 1546 ≈ 1.6571
+const SCALED_H  = Math.round(SAFE_H * SCALE);
 
-const fullOutput = OUTPUT.replace(".png", "-full.png");
-await page.screenshot({ path: fullOutput, fullPage: false });
-console.log(`✓ Full banner (2560×1440) → ${fullOutput.replace(ROOT, "").replace(/\\/g, "/")}`);
-
-
+// Close current page and open a new one with the scale factor applied
 await browser.close();
 proc?.kill();
 
-console.log(`✓ Banner preview (2560×423) → ${OUTPUT.replace(ROOT, "").replace(/\\/g, "/")}`);
-console.log(`✓ Full banner (2560×1440)  → ${fullOutput.replace(ROOT, "").replace(/\\/g, "/")}`);
+const browser2 = await chromium.launch({ headless: true });
+const page2 = await browser2.newPage({
+  viewport:          { width: SAFE_W, height: SAFE_H },
+  deviceScaleFactor: SCALE,
+});
+
+await page2.goto(TARGET_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
+try {
+  await page2.waitForFunction(
+    () => { const el = document.querySelector("[data-subs]"); return el && el.textContent.trim().length > 0; },
+    { timeout: 15_000 }
+  );
+} catch { /* continue */ }
+await page2.waitForTimeout(3000);
+
+// Lock layout to safe-area dimensions (viewport CSS pixels same as step 1)
+await page2.addStyleTag({ content: `
+  body, html { margin:0; padding:0; overflow:hidden; background:#000; }
+  .youtube-canvas { width: ${SAFE_W}px !important; height: ${SAFE_H}px !important; min-height:unset !important; }
+  .banner-stage   { width: ${SAFE_W}px !important; height: ${SAFE_H}px !important; max-height:unset !important; }
+  .safe-area      { width: ${SAFE_W}px !important; height: ${SAFE_H}px !important; transform:none !important; }
+` });
+await page2.waitForTimeout(400);
+
+// Screenshot — deviceScaleFactor makes the physical pixels = SAFE_W * SCALE = 2560
+// Place the scaled banner centred vertically in a black 2560×1440 canvas using Sharp
+const scaledBannerBuf = await page2.screenshot({ clip: { x:0, y:0, width:SAFE_W, height:SAFE_H } });
+await browser2.close();
+
+const sharp = (await import("sharp")).default;
+const topY  = Math.round((FULL_H - SCALED_H) / 2);
+
+const fullOutput = OUTPUT.replace(".png", "-full.png");
+await sharp({ create: { width: FULL_W, height: FULL_H, channels: 4, background: {r:0,g:0,b:0,alpha:1} } })
+  .composite([{ input: scaledBannerBuf, top: topY, left: 0 }])
+  .png({ quality: 95 })
+  .toFile(fullOutput);
+
+console.log(`✓ Full banner (${FULL_W}×${FULL_H}) → ${fullOutput.replace(ROOT,"").replace(/\\/g,"/")}`);

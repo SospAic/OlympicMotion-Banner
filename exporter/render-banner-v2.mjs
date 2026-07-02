@@ -29,18 +29,22 @@ if (!existsSync(BG)) {
 const subs       = Number(CONFIG.data?.subs ?? 0);
 const goal       = Number(CONFIG.mission?.goal ?? 1000000);
 const milestones = (CONFIG.achievements ?? []).map(a => Number(a.threshold));
-const autoNext   = milestones.find(t => t > subs) ?? goal;
-const prevMile   = [...milestones].reverse().find(t => t <= subs) ?? 0;
-const segSize    = autoNext - prevMile;
-const pctToNext  = Math.min(100, segSize > 0 ? ((subs - prevMile) / segSize) * 100 : 100);
-const toGo       = autoNext - subs;
+const maxMilestone = Math.max(...milestones, goal);
+const goalReached  = subs >= maxMilestone;
+const autoNext   = goalReached ? maxMilestone : (milestones.find(t => t > subs) ?? goal);
+const prevMile   = goalReached ? milestones[milestones.length - 1] ?? 0
+                               : ([...milestones].reverse().find(t => t <= subs) ?? 0);
+const segSize    = Math.max(1, autoNext - prevMile);
+const pctToNext  = goalReached ? 100
+                               : Math.min(100, segSize > 0 ? ((subs - prevMile) / segSize) * 100 : 100);
+const toGo       = goalReached ? 0 : Math.max(0, autoNext - subs);
 
 const fmtPlain = n => new Intl.NumberFormat("en-US", { useGrouping: false }).format(n);
 const compact  = n => n >= 1000000 ? (n/1000000).toFixed(0)+"M"
                     : n >= 1000    ? (n/1000).toFixed(0)+"K"
                     : String(n);
 
-console.log(`Subs: ${subs} | Next: ${compact(autoNext)} | Prev: ${compact(prevMile)} | Pct: ${pctToNext.toFixed(1)}%`);
+console.log(`Subs: ${subs} | Next: ${compact(autoNext)} | Prev: ${compact(prevMile)} | Pct: ${pctToNext.toFixed(1)}% | GoalReached: ${goalReached}`);
 
 // ── Background dimensions ─────────────────────────────────────────────────
 const meta = await sharp(BG).metadata();
@@ -121,6 +125,7 @@ const fillW = Math.round(PB.w * pctToNext / 100);
 
 // Auto-shrink or compact for TO GO number
 function toGoDisplay(n) {
+  if (goalReached) return "✓";
   if (NG.compact && n > NG.compactThr) {
     if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
     if (n >= 1000)    return (n / 1000).toFixed(1).replace(/\.0$/, "") + "K";
@@ -139,7 +144,8 @@ function autoFontSize(text, maxW, maxFS, minFS) {
 }
 
 const toGoText = toGoDisplay(toGo);
-const toGoFS   = autoFontSize(toGoText, NG.w * 0.92, NG.maxFS, NG.minFS);
+const toGoFS   = goalReached ? Math.round(NG.maxFS * 0.9)
+                             : autoFontSize(toGoText, NG.w * 0.92, NG.maxFS, NG.minFS);
 
 const badges = CONFIG.achievements ?? [];
 function badgeSVG(b, i) {
