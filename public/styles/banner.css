@@ -159,7 +159,7 @@ youtube-canvas {
 }
 
 .logo-orbit {
-  width: clamp(100px, 10.5vw, 170px);
+  width: clamp(90px, 9.5vw, 148px);
   aspect-ratio: 1;
   position: relative;
   display: grid;
@@ -170,7 +170,7 @@ youtube-canvas {
 .logo-ring {
   position: absolute;
   inset: 0;
-  border: clamp(4px, 0.45vw, 8px) solid var(--gold-100);
+  border: clamp(3px, 0.38vw, 7px) solid var(--gold-100);
   border-radius: 50%;
   background: rgba(0,0,0,.70);
   animation: ringPulse 3.8s ease-in-out infinite;
@@ -192,7 +192,7 @@ youtube-canvas {
 }
 
 .logo-img {
-  width: clamp(78px, 8.3vw, 134px);
+  width: clamp(70px, 7.5vw, 118px);
   aspect-ratio: 1;
   border-radius: 50%;
   position: relative;
@@ -250,7 +250,7 @@ youtube-canvas {
   font-style: italic;
   line-height: .88;
   letter-spacing: -0.5px;
-  font-size: clamp(22px, 4.2vw, 66px);
+  font-size: clamp(20px, 3.8vw, 60px);
   text-shadow: 0 8px 24px rgba(0,0,0,.9);
   overflow: hidden;
   text-align: center;

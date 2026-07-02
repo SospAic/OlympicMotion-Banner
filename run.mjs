@@ -47,6 +47,7 @@ function loadEnv() {
 // ── Parse CLI args ────────────────────────────────────────────────────────
 const args       = process.argv.slice(2);
 const noUpload   = args.includes("--no-upload");
+const useV2      = args.includes("--v2");          // use Sharp v2 renderer (no Playwright)
 const manualSubs = args.find(a => a.startsWith("--subs="))?.split("=")[1];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -76,8 +77,10 @@ async function waitForServer(url, tries = 30) {
 // ── Step 1: Fetch subscriber count ────────────────────────────────────────
 async function fetchSubscribers() {
   if (manualSubs) {
-    log(`使用手动指定订阅数：${manualSubs}`);
-    return Number(manualSubs);
+    const n = Number(manualSubs);
+    if (isNaN(n) || n < 0) throw new Error(`--subs 参数无效：${manualSubs}`);
+    log(`使用手动指定订阅数：${n}`);
+    return n;
   }
 
   const apiKey    = process.env.YOUTUBE_API_KEY;
@@ -90,20 +93,30 @@ async function fetchSubscribers() {
 
   log("📡 正在从 YouTube API 获取订阅数...");
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
     const url = `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&key=${apiKey}`;
-    const res  = await fetch(url);
+    const res  = await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeout));
     const data = await res.json();
 
     if (data.error) {
-      log(`❌ YouTube API 错误：${data.error.message}`);
+      log(`❌ YouTube API 错误：${data.error.message}（code ${data.error.code}）`);
+      return null;
+    }
+    if (!data.items?.length) {
+      log("⚠  YouTube API 返回空结果，检查 YOUTUBE_CHANNEL_ID 是否正确");
       return null;
     }
 
-    const subs = Number(data.items?.[0]?.statistics?.subscriberCount ?? 0);
+    const subs = Number(data.items[0].statistics?.subscriberCount ?? 0);
     log(`✓ 获取订阅数成功：${subs}`);
     return subs;
   } catch (e) {
-    log(`❌ YouTube API 请求失败：${e.message}`);
+    if (e.name === "AbortError") {
+      log("❌ YouTube API 请求超时（15s）");
+    } else {
+      log(`❌ YouTube API 请求失败：${e.message}`);
+    }
     return null;
   }
 }
@@ -153,9 +166,30 @@ async function startServer() {
   return { proc, url: serverUrl };
 }
 
-// ── Step 4: Render banner ─────────────────────────────────────────────────
+// ── Step 4a: Render banner via Sharp v2 (fast, no browser) ───────────────
+async function renderBannerV2() {
+  log("🎨 正在生成 Banner v2（Sharp 合成）...");
+  const { mkdirSync } = await import("node:fs");
+  mkdirSync(resolve(ROOT, "dist"), { recursive: true });
+
+  await new Promise((res, rej) => {
+    const proc = spawn(process.execPath, ["exporter/render-banner-v2.mjs"], {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: { ...process.env },
+    });
+    proc.on("close", code => code === 0
+      ? res()
+      : rej(new Error(`render-banner-v2.mjs exited ${code}`)));
+  });
+
+  log("✓ Banner v2 已生成：dist/banner-v2.png + dist/banner-v2-full.png");
+  return resolve(ROOT, "dist/banner-v2.png");
+}
+
+// ── Step 4b: Render banner via Playwright v1 (web screenshot) ────────────
 async function renderBanner(serverUrl) {
-  log("🎨 正在生成 Banner...");
+  log("🎨 正在生成 Banner v1（Playwright 截图）...");
   const { mkdirSync } = await import("node:fs");
   mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 
@@ -171,7 +205,7 @@ async function renderBanner(serverUrl) {
     proc.on("close", code => code === 0 ? res() : rej(new Error(`render-banner.mjs exited ${code}`)));
   });
 
-  log(`✓ Banner 已生成：dist/banner.png + dist/banner-full.png`);
+  log("✓ Banner v1 已生成：dist/banner.png + dist/banner-full.png");
   return resolve(ROOT, "dist/banner.png");
 }
 
@@ -179,22 +213,36 @@ async function renderBanner(serverUrl) {
 async function uploadBanner() {
   log("📤 正在上传 Banner 到 YouTube...");
   const uploader = resolve(ROOT, "exporter/upload-banner.mjs");
-  const { default: upload } = await import(`file://${uploader}?t=${Date.now()}`).catch(() => ({}));
 
-  // Instead, run as subprocess to get clean output
+  if (!existsSync(uploader)) {
+    throw new Error("upload-banner.mjs 不存在：" + uploader);
+  }
+
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, ["exporter/upload-banner.mjs"], {
       cwd:   ROOT,
       stdio: "inherit",
       env:   { ...process.env },
     });
+
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM");
+      reject(new Error("上传超时（5分钟），进程已终止"));
+    }, 5 * 60 * 1000);
+
     proc.on("close", code => {
+      clearTimeout(timer);
       if (code === 0) {
         log("✅ Banner 上传成功");
         resolve();
       } else {
-        reject(new Error(`上传失败，退出码：${code}`));
+        reject(new Error(`上传失败，退出码：${code}，请检查日志`));
       }
+    });
+
+    proc.on("error", err => {
+      clearTimeout(timer);
+      reject(new Error(`上传进程启动失败：${err.message}`));
     });
   });
 }
@@ -202,7 +250,7 @@ async function uploadBanner() {
 // ── Main ──────────────────────────────────────────────────────────────────
 async function main() {
   log("═══════════════════════════════════════");
-  log("  OlympicMotion Banner Engine - 开始执行");
+  log(`  OlympicMotion Banner Engine - 开始执行 (${useV2 ? "v2 Sharp" : "v1 Playwright"})`);
   log("═══════════════════════════════════════");
 
   loadEnv();
@@ -216,12 +264,22 @@ async function main() {
     // 2. Update config
     updateConfig(subs);
 
-    // 3. Start server
-    const { proc, url } = await startServer();
-    serverProc = proc;
+    if (useV2) {
+      // ── V2 path: Sharp image composition, no browser needed ──
+      await renderBannerV2();
 
-    // 4. Render
-    await renderBanner(url);
+      // Set BANNER_FILE so upload-banner.mjs picks up v2 output
+      process.env.BANNER_FILE = resolve(ROOT, "dist/banner-v2.png");
+
+    } else {
+      // ── V1 path: Playwright screenshot ──
+      // 3. Start server
+      const { proc, url } = await startServer();
+      serverProc = proc;
+
+      // 4. Render
+      await renderBanner(url);
+    }
 
     // 5. Upload
     if (!noUpload) {
@@ -236,6 +294,7 @@ async function main() {
 
   } catch (e) {
     log(`❌ 执行失败：${e.message}`);
+    if (e.stack) log(e.stack.split("\n").slice(1, 4).join(" | "));
     process.exitCode = 1;
   } finally {
     if (serverProc) {

@@ -88,22 +88,33 @@ function log(msg, level = "INFO") {
 }
 
 // ── Fetch current subscriber count ────────────────────────────────────────
-async function fetchSubs() {
+async function fetchSubs(retries = 3) {
   if (!API_KEY || !CHANNEL_ID) return null;
-  try {
-    const res  = await fetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${API_KEY}`
-    );
-    const data = await res.json();
-    if (data.error) {
-      log(`YouTube API 错误：${data.error.message}`, "WARN");
-      return null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      const res  = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${CHANNEL_ID}&key=${API_KEY}`,
+        { signal: controller.signal }
+      ).finally(() => clearTimeout(timeout));
+      const data = await res.json();
+      if (data.error) {
+        log(`YouTube API 错误：${data.error.message}（code ${data.error.code}）`, "WARN");
+        return null;
+      }
+      return Number(data.items?.[0]?.statistics?.subscriberCount ?? 0);
+    } catch (e) {
+      const msg = e.name === "AbortError" ? "请求超时" : e.message;
+      if (attempt < retries) {
+        log(`API 请求失败（第${attempt}次）：${msg}，${attempt * 2}s 后重试...`, "WARN");
+        await new Promise(r => setTimeout(r, attempt * 2000));
+      } else {
+        log(`API 请求失败（已重试 ${retries} 次）：${msg}`, "WARN");
+      }
     }
-    return Number(data.items?.[0]?.statistics?.subscriberCount ?? 0);
-  } catch (e) {
-    log(`API 请求失败：${e.message}`, "WARN");
-    return null;
   }
+  return null;
 }
 
 // ── Trigger banner update ─────────────────────────────────────────────────
@@ -117,10 +128,12 @@ async function triggerUpdate(subs, reason) {
   updateCount++;
   log(`🚀 触发 Banner 更新 #${updateCount}，原因：${reason}，订阅数：${subs}`);
 
-  const args = subs > 0 ? [`--subs=${subs}`] : [];
+  // Default to v2 (Sharp, no browser) — faster and more stable
+  const args = ["run.mjs", "--v2"];
+  if (subs > 0) args.push(`--subs=${subs}`);
 
   await new Promise((resolve) => {
-    const proc = spawn(process.execPath, ["run.mjs", ...args], {
+    const proc = spawn(process.execPath, args, {
       cwd:   ROOT,
       stdio: "inherit",
       env:   { ...process.env },
@@ -267,3 +280,13 @@ if (PUBLIC_URL) {
 // Graceful shutdown
 process.on("SIGTERM", () => { log("收到 SIGTERM，正在退出..."); process.exit(0); });
 process.on("SIGINT",  () => { log("收到 SIGINT，正在退出...");  process.exit(0); });
+
+// Prevent unhandled rejections from crashing the daemon
+process.on("unhandledRejection", (reason) => {
+  log(`未处理的 Promise 拒绝：${reason?.message ?? reason}`, "ERROR");
+});
+process.on("uncaughtException", (err) => {
+  log(`未捕获的异常：${err.message}`, "ERROR");
+  if (err.stack) log(err.stack.split("\n").slice(1, 3).join(" | "), "ERROR");
+  // Don't exit — PM2 will restart if needed, but stay alive for transient errors
+});

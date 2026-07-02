@@ -285,17 +285,32 @@ async function menuSession() {
 // ── 3. Generate menu ──────────────────────────────────────────────────────
 async function menuGenerate() {
   header("生成 Banner");
-  console.log(`  ${cyan("1")}  生成 Banner（使用当前订阅数）`);
-  console.log(`  ${cyan("2")}  生成 Banner（手动指定订阅数）`);
-  console.log(`  ${cyan("3")}  仅刷新订阅数（不生成）`);
+  console.log(`  ${dim("方案说明：")} ${cyan("v2")}=Sharp合成（新版，默认）  ${cyan("v1")}=Playwright截图（旧版）`);
+  console.log();
+  console.log(`  ${cyan("1")}  生成 Banner v2 — 自动获取订阅数 ${green("[推荐]")}`);
+  console.log(`  ${cyan("2")}  生成 Banner v2 — 手动指定订阅数`);
+  console.log(`  ${cyan("3")}  生成 Banner v1 — 自动获取订阅数（旧方案）`);
+  console.log(`  ${cyan("4")}  生成 Banner v1 — 手动指定订阅数（旧方案）`);
+  console.log(`  ${cyan("5")}  仅刷新订阅数（不生成）`);
   console.log(`  ${cyan("0")}  返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
   switch (c) {
     case "1":
-      console.log(); await runScript("run.mjs --no-upload");
+      console.log(); await runScript("run.mjs --no-upload --v2");
       break;
     case "2": {
+      const subs = await ask("  输入订阅数：");
+      if (subs.trim()) {
+        console.log();
+        await run(process.execPath, ["run.mjs", "--no-upload", "--v2", `--subs=${subs.trim()}`]);
+      }
+      break;
+    }
+    case "3":
+      console.log(); await runScript("run.mjs --no-upload");
+      break;
+    case "4": {
       const subs = await ask("  输入订阅数：");
       if (subs.trim()) {
         console.log();
@@ -303,7 +318,7 @@ async function menuGenerate() {
       }
       break;
     }
-    case "3": {
+    case "5": {
       const subs = await fetchSubsPreview();
       console.log(`\n  当前订阅数：${yellow(subs)}`);
       break;
@@ -336,16 +351,30 @@ async function menuUpload() {
 // ── 5. Run all ────────────────────────────────────────────────────────────
 async function menuRunAll() {
   header("完整运行（生成 + 上传）");
-  console.log(`  ${cyan("1")}  完整运行（自动获取订阅数）`);
-  console.log(`  ${cyan("2")}  完整运行（手动指定订阅数）`);
+  console.log(`  ${dim("默认使用新方案 v2（Sharp合成），更快更稳定")}\n`);
+  console.log(`  ${cyan("1")}  v2 完整运行 — 自动获取订阅数 ${green("[推荐]")}`);
+  console.log(`  ${cyan("2")}  v2 完整运行 — 手动指定订阅数`);
+  console.log(`  ${cyan("3")}  v1 完整运行 — 自动获取订阅数（旧方案）`);
+  console.log(`  ${cyan("4")}  v1 完整运行 — 手动指定订阅数（旧方案）`);
   console.log(`  ${cyan("0")}  返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
   switch (c) {
     case "1":
-      console.log(); await runScript("run.mjs");
+      console.log(); await run(process.execPath, ["run.mjs", "--v2"]);
       break;
     case "2": {
+      const subs = await ask("  输入订阅数：");
+      if (subs.trim()) {
+        console.log();
+        await run(process.execPath, ["run.mjs", "--v2", `--subs=${subs.trim()}`]);
+      }
+      break;
+    }
+    case "3":
+      console.log(); await runScript("run.mjs");
+      break;
+    case "4": {
       const subs = await ask("  输入订阅数：");
       if (subs.trim()) {
         console.log();
