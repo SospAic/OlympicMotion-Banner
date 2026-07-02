@@ -170,25 +170,21 @@ async function mainMenu() {
   console.log("\n  " + bold("功能菜单："));
   console.log(`  ${cyan("1")}  安装 & 初始化`);
   console.log(`  ${cyan("2")}  登录 & Session 管理`);
-  console.log(`  ${cyan("3")}  生成 Banner`);
-  console.log(`  ${cyan("4")}  上传到 YouTube`);
-  console.log(`  ${cyan("5")}  完整运行（生成 + 上传）`);
-  console.log(`  ${cyan("6")}  守护进程管理`);
-  console.log(`  ${cyan("7")}  配置管理`);
-  console.log(`  ${cyan("8")}  查看日志`);
+  console.log(`  ${cyan("3")}  生成 & 上传 Banner`);
+  console.log(`  ${cyan("4")}  守护进程管理`);
+  console.log(`  ${cyan("5")}  配置管理`);
+  console.log(`  ${cyan("6")}  查看日志`);
   console.log(`  ${cyan("0")}  退出`);
   console.log();
 
-  const choice = await ask(`  请选择 [0-8]：`);
+  const choice = await ask(`  请选择 [0-6]：`);
   switch (choice.trim()) {
     case "1": await menuInstall();  break;
     case "2": await menuSession();  break;
-    case "3": await menuGenerate(); break;
-    case "4": await menuUpload();   break;
-    case "5": await menuRunAll();   break;
-    case "6": await menuDaemon();   break;
-    case "7": await menuConfig();   break;
-    case "8": await menuLogs();     break;
+    case "3": await menuBanner();   break;
+    case "4": await menuDaemon();   break;
+    case "5": await menuConfig();   break;
+    case "6": await menuLogs();     break;
     case "0": rl.close(); console.log("\n  再见！\n"); process.exit(0);
     default:  await mainMenu();
   }
@@ -282,112 +278,81 @@ async function menuSession() {
   await pause(); await mainMenu();
 }
 
-// ── 3. Generate menu ──────────────────────────────────────────────────────
-async function menuGenerate() {
-  header("生成 Banner");
-  console.log(`  ${dim("方案说明：")} ${cyan("v2")}=Sharp合成（新版，默认）  ${cyan("v1")}=Playwright截图（旧版）`);
+// ── 3. Banner menu (生成 & 上传，合并入口) ───────────────────────────────
+async function menuBanner() {
+  header("生成 & 上传 Banner");
+
+  const hasBanner   = existsSync(BANNER_FILE);
+  const hasBannerV2 = existsSync(resolve(ROOT, "dist/banner-v2.png"));
+
+  console.log(`  ${dim("方案说明：")} ${cyan("新方案 v2")} = Sharp合成（快，无需浏览器）  ${cyan("旧方案 v1")} = Playwright截图`);
+  if (hasBannerV2) console.log(`  ${dim("v2 Banner：")} ${green("已存在")}`);
+  if (hasBanner)   console.log(`  ${dim("v1 Banner：")} ${green("已存在")}`);
   console.log();
-  console.log(`  ${cyan("1")}  生成 Banner v2 — 自动获取订阅数 ${green("[推荐]")}`);
-  console.log(`  ${cyan("2")}  生成 Banner v2 — 手动指定订阅数`);
-  console.log(`  ${cyan("3")}  生成 Banner v1 — 自动获取订阅数（旧方案）`);
-  console.log(`  ${cyan("4")}  生成 Banner v1 — 手动指定订阅数（旧方案）`);
-  console.log(`  ${cyan("5")}  仅刷新订阅数（不生成）`);
+
+  console.log(`  ${bold(cyan("── 新方案 v2 ──"))}`);
+  console.log(`  ${cyan("1")}  v2 仅生成`);
+  console.log(`  ${cyan("2")}  v2 生成并上传 ${green("[推荐]")}`);
+  console.log(`  ${cyan("3")}  v2 手动指定订阅数，仅生成`);
+  console.log(`  ${cyan("4")}  v2 手动指定订阅数，生成并上传`);
+  console.log();
+  console.log(`  ${bold(cyan("── 旧方案 v1 ──"))}`);
+  console.log(`  ${cyan("5")}  v1 仅生成`);
+  console.log(`  ${cyan("6")}  v1 生成并上传`);
+  console.log(`  ${cyan("7")}  v1 手动指定订阅数，仅生成`);
+  console.log(`  ${cyan("8")}  v1 手动指定订阅数，生成并上传`);
+  console.log();
+  console.log(`  ${bold(cyan("── 仅上传 ──"))}`);
+  console.log(`  ${cyan("9")}  上传已有 Banner（v2 优先，无则用 v1）`);
   console.log(`  ${cyan("0")}  返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
+  console.log();
+
   switch (c) {
     case "1":
-      console.log(); await runScript("run.mjs", "--no-upload", "--v2");
+      await runScript("run.mjs", "--v2", "--no-upload");
       break;
-    case "2": {
+    case "2":
+      await run(process.execPath, ["run.mjs", "--v2"]);
+      break;
+    case "3": {
       const subs = await ask("  输入订阅数：");
-      if (subs.trim()) {
-        console.log();
-        await run(process.execPath, ["run.mjs", "--no-upload", "--v2", `--subs=${subs.trim()}`]);
-      }
+      if (subs.trim()) await run(process.execPath, ["run.mjs", "--v2", "--no-upload", `--subs=${subs.trim()}`]);
       break;
     }
-    case "3":
-      console.log(); await runScript("run.mjs", "--no-upload");
-      break;
     case "4": {
       const subs = await ask("  输入订阅数：");
-      if (subs.trim()) {
-        console.log();
-        await run(process.execPath, ["run.mjs", "--no-upload", `--subs=${subs.trim()}`]);
-      }
+      if (subs.trim()) await run(process.execPath, ["run.mjs", "--v2", `--subs=${subs.trim()}`]);
       break;
     }
-    case "5": {
-      const subs = await fetchSubsPreview();
-      console.log(`\n  当前订阅数：${yellow(subs)}`);
+    case "5":
+      await runScript("run.mjs", "--no-upload");
       break;
-    }
-    case "0": break;
-  }
-  await pause(); await mainMenu();
-}
-
-// ── 4. Upload menu ────────────────────────────────────────────────────────
-async function menuUpload() {
-  header("上传到 YouTube");
-  const hasBanner = existsSync(BANNER_FILE);
-  console.log(statusLine(hasBanner, "Banner 文件"));
-  console.log();
-  if (!hasBanner) {
-    console.log(yellow("  ⚠  请先生成 Banner（功能 3）\n"));
-  }
-  console.log(`  ${cyan("1")}  上传当前 Banner`);
-  console.log(`  ${cyan("0")}  返回主菜单\n`);
-
-  const c = (await ask("  请选择：")).trim();
-  if (c === "1") {
-    console.log();
-    await run(process.execPath, ["exporter/upload-banner.mjs"]);
-  }
-  await pause(); await mainMenu();
-}
-
-// ── 5. Run all ────────────────────────────────────────────────────────────
-async function menuRunAll() {
-  header("完整运行（生成 + 上传）");
-  console.log(`  ${dim("默认使用新方案 v2（Sharp合成），更快更稳定")}\n`);
-  console.log(`  ${cyan("1")}  v2 完整运行 — 自动获取订阅数 ${green("[推荐]")}`);
-  console.log(`  ${cyan("2")}  v2 完整运行 — 手动指定订阅数`);
-  console.log(`  ${cyan("3")}  v1 完整运行 — 自动获取订阅数（旧方案）`);
-  console.log(`  ${cyan("4")}  v1 完整运行 — 手动指定订阅数（旧方案）`);
-  console.log(`  ${cyan("0")}  返回主菜单\n`);
-
-  const c = (await ask("  请选择：")).trim();
-  switch (c) {
-    case "1":
-      console.log(); await run(process.execPath, ["run.mjs", "--v2"]);
+    case "6":
+      await runScript("run.mjs");
       break;
-    case "2": {
+    case "7": {
       const subs = await ask("  输入订阅数：");
-      if (subs.trim()) {
-        console.log();
-        await run(process.execPath, ["run.mjs", "--v2", `--subs=${subs.trim()}`]);
-      }
+      if (subs.trim()) await run(process.execPath, ["run.mjs", "--no-upload", `--subs=${subs.trim()}`]);
       break;
     }
-    case "3":
-      console.log(); await runScript("run.mjs");
-      break;
-    case "4": {
+    case "8": {
       const subs = await ask("  输入订阅数：");
-      if (subs.trim()) {
-        console.log();
-        await run(process.execPath, ["run.mjs", `--subs=${subs.trim()}`]);
-      }
+      if (subs.trim()) await run(process.execPath, ["run.mjs", `--subs=${subs.trim()}`]);
       break;
     }
+    case "9":
+      await run(process.execPath, ["exporter/upload-banner.mjs"]);
+      break;
     case "0": break;
+    default:
+      console.log(yellow("  无效选项"));
   }
   await pause(); await mainMenu();
 }
 
-// ── 6. Daemon menu ────────────────────────────────────────────────────────
+// ── 4. Daemon menu ────────────────────────────────────────────────────────
 async function menuDaemon() {
   header("守护进程管理 (PM2)");
 
@@ -447,7 +412,7 @@ async function menuDaemon() {
   await pause(); await mainMenu();
 }
 
-// ── 7. Config menu ────────────────────────────────────────────────────────
+// ── 5. Config menu ────────────────────────────────────────────────────────
 async function menuConfig() {
   header("配置管理");
   console.log(`  ${cyan("1")}  编辑 .env 配置文件`);
@@ -518,7 +483,7 @@ async function menuConfig() {
   await pause(); await mainMenu();
 }
 
-// ── 8. Logs menu ─────────────────────────────────────────────────────────
+// ── 6. Logs menu ─────────────────────────────────────────────────────────
 async function menuLogs() {
   header("日志");
   const logFile = "/var/log/olympicmotion-banner.log";
