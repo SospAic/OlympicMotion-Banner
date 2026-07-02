@@ -150,14 +150,16 @@ const toGoFS   = goalReached ? Math.round(NG.maxFS * 0.9)
 const badges = CONFIG.achievements ?? [];
 function badgeSVG(b, i) {
   const unlocked = subs >= Number(b.threshold);
+  // Hidden badges are completely omitted — no SVG rendered, background shows through
+  if (!unlocked) return "";
+
   const cx = BADGE_ROW.x0 + i * BADGE_ROW.step;
   const cy = BADGE_ROW.y;
   const sz = BADGE_ROW.size;
   const r  = sz * 0.5;
   const ck = BADGE_ROW.ck;
 
-  if (unlocked) {
-    return `
+  return `
     <g>
       <path d="M${cx} ${cy-r+2} L${cx+r-2} ${cy-r*0.48} v${r*0.88} c0 ${r*0.46} -${r*0.36} ${r*0.78} -${r-2} ${r*0.96} c-${r*0.58} -${r*0.18} -${r-2} -${r*0.50} -${r-2} -${r*0.96} V${cy-r*0.48} Z"
         fill="url(#gld)" stroke="#ffe896" stroke-width="1.5" filter="url(#glow)"/>
@@ -165,28 +167,12 @@ function badgeSVG(b, i) {
         fill="none" stroke="${ck.color}" stroke-width="${sz*ck.wRatio}"
         stroke-linecap="round" stroke-linejoin="round"/>
       <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
-        font-family="${BADGE_ROW.lblFS > 0 ? 'Arial Black,Impact,sans-serif' : 'Arial'}" font-weight="900"
+        font-family="Arial Black,Impact,sans-serif" font-weight="900"
         font-size="${BADGE_ROW.lblFS}" fill="${BADGE_ROW.lblColor}">${b.label}</text>
       <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
         font-family="Arial,sans-serif" font-size="${BADGE_ROW.capFS}"
         fill="${BADGE_ROW.capColor}">SUBSCRIBERS</text>
     </g>`;
-  } else {
-    return `
-    <g opacity="${BADGE_ROW.lockOp}">
-      <path d="M${cx} ${cy-r+2} L${cx+r-2} ${cy-r*0.48} v${r*0.88} c0 ${r*0.46} -${r*0.36} ${r*0.78} -${r-2} ${r*0.96} c-${r*0.58} -${r*0.18} -${r-2} -${r*0.50} -${r-2} -${r*0.96} V${cy-r*0.48} Z"
-        fill="rgba(30,22,6,0.88)" stroke="rgba(255,201,74,0.32)" stroke-width="1.2"/>
-      <rect x="${cx-r*0.26}" y="${cy-r*0.08}" width="${r*0.52}" height="${r*0.46}" rx="2" fill="rgba(255,255,255,0.55)"/>
-      <rect x="${cx-r*0.22}" y="${cy-r*0.26}" width="${r*0.44}" height="${r*0.24}" rx="${r*0.10}"
-        fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.5"/>
-      <text x="${cx}" y="${BADGE_ROW.labelY}" text-anchor="middle"
-        font-family="Arial Black,Impact,sans-serif" font-weight="900"
-        font-size="${BADGE_ROW.lblFS}" fill="${BADGE_ROW.lockLbl}">${b.label}</text>
-      <text x="${cx}" y="${BADGE_ROW.captY}" text-anchor="middle"
-        font-family="Arial,sans-serif" font-size="${BADGE_ROW.capFS}"
-        fill="${BADGE_ROW.lockCap}">SUBSCRIBERS</text>
-    </g>`;
-  }
 }
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${BW}" height="${BH}">
