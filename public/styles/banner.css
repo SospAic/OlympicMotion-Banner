@@ -593,7 +593,7 @@ youtube-canvas {
 .badge-grid {
   margin-top: 0;
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--badge-count, 8), minmax(0, 1fr));
   gap: clamp(2px, 0.3vw, 5px);
   flex-shrink: 0;
   width: 100%;

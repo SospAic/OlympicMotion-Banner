@@ -34,6 +34,7 @@ const subs       = Number(CONFIG.data?.subs ?? 0);
 const goal       = Number(CONFIG.mission?.goal ?? 1000000);
 
 // Sort milestones ascending — never mutate the original array
+// Use ALL achievements for milestone math (not limited by display count)
 const milestones = (CONFIG.achievements ?? [])
   .map(a => Number(a.threshold))
   .sort((a, b) => a - b);
@@ -115,6 +116,7 @@ const NG = {
 };
 
 const BADGE_ROW = {
+  count: BRcfg.count      ?? (CONFIG.achievements?.length ?? 7),  // total badges to display
   x0:    BRcfg.x0        ?? 796,
   y:     BRcfg.y         ?? 162,
   step:  BRcfg.step      ?? 168,
@@ -167,7 +169,8 @@ const toGoText = toGoDisplay(toGo);
 const toGoFS   = goalReached ? Math.round(NG.maxFS * 0.9)
                              : autoFontSize(toGoText, NG.w * 0.92, NG.maxFS, NG.minFS);
 
-const badges = CONFIG.achievements ?? [];
+// Slice achievements to the configured count — extra entries are ignored
+const badges = (CONFIG.achievements ?? []).slice(0, BADGE_ROW.count);
 function badgeSVG(b, i) {
   const unlocked = subs >= Number(b.threshold);
   // Hidden badges are completely omitted — no SVG rendered, background shows through

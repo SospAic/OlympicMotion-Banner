@@ -17,19 +17,19 @@
     "targetLabel": "Target"
   },
   "data": {
-    "subs": 90
+    "subs": 500001
   },
   "v2Layout": {
     "_comment": "bg.png 原始尺寸 1642x923 (YouTube Full Banner)，所有坐标基于此尺寸",
     "_tip": "修改后运行: node exporter/render-banner-v2.mjs 查看效果",
     "progressBar": {
       "_comment": "进度条轨道，金色填充表示当前订阅数完成百分比",
-      "x": 410,
-      "y": 558,
-      "w": 470,
-      "h": 62,
-      "cornerRadius": 31,
-      "fillCornerRadius": 31,
+      "x": 648,
+      "y": 508,
+      "w": 220,
+      "h": 31,
+      "cornerRadius": 15,
+      "fillCornerRadius": 15,
       "fillStyle": {
         "type": "gradient",
         "colors": ["#fffae8", "#ffd95a", "#ffc233", "#f5a615", "#a85f00"],
@@ -40,8 +40,8 @@
       "subsNumber": {
         "_comment": "订阅数显示在进度条正中央，offsetX/Y 是相对进度条宽高的比例 0~1",
         "offsetX": 0.5,
-        "offsetY": 0.72,
-        "fontSize": 40,
+        "offsetY": 0.85,
+        "fontSize": 33,
         "color": "#ffffff",
         "fontFamily": "Arial Black,Impact,sans-serif",
         "fontWeight": "900",
@@ -51,15 +51,15 @@
     },
     "toGoBox": {
       "_comment": "当前订阅数距离最近档位还差多少，显示在进度条右侧",
-      "x": 900,
-      "y": 558,
-      "w": 130,
-      "h": 62,
+      "x": 946,
+      "y": 509,
+      "w": 90,
+      "h": 37,
       "numberOffsetX": 0.5,
       "numberOffsetY": 0.78,
-      "fontSize": 44,
+      "fontSize": 35,
       "autoShrink": true,
-      "maxFontSize": 44,
+      "maxFontSize": 35,
       "minFontSize": 16,
       "useCompactFormat": true,
       "compactThreshold": 99999,
@@ -68,11 +68,12 @@
       "fontWeight": "900"
     },
     "badgeRow": {
-      "_comment": "7个成就徽章，x0是第一个徽章中心x坐标，step是相邻徽章间距",
-      "x0": 445,
-      "y": 494,
-      "step": 68,
-      "size": 48,
+      "_comment": "成就徽章行，count=显示徽章总数（自动截取 achievements 前 count 个）",
+      "count": 8,
+      "x0": 656,
+      "y": 437,
+      "step": 51,
+      "size": 39,
       "labelY": 516,
       "captionY": 527,
       "labelFontSize": 11,
@@ -115,7 +116,8 @@
     { "label": "50K",  "caption": "Subscribers", "threshold": 50000 },
     { "label": "100K", "caption": "Subscribers", "threshold": 100000 },
     { "label": "500K", "caption": "Subscribers", "threshold": 500000 },
-    { "label": "1M",   "caption": "Subscribers", "threshold": 1000000 }
+    { "label": "1M",   "caption": "Subscribers", "threshold": 1000000 },
+    { "label": "5M",   "caption": "Subscribers", "threshold": 5000000 }
   ],
   "theme": "gold",
   "showSafeArea": false,

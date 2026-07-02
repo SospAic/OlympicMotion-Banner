@@ -1,11 +1,11 @@
 ﻿/**
- * Banner Designer 鈥?Layer 1 glue script
- * Loads config 鈫?calls Runtime 鈫?paints DOM.
+ * Banner Designer — Layer 1 glue script
+ * Loads config → calls Runtime → paints DOM.
  * Never touches YouTube API directly.
  */
 import { computeBannerState } from "/runtime/banner-runtime.js";
 
-// 鈹€鈹€ Fallback config (used if JSON fetch fails) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Fallback config (used if JSON fetch fails) ────────────────────────────
 const DEFAULTS = {
   brand: {
     channelName: "OlympicMotion",
@@ -45,13 +45,14 @@ const DEFAULTS = {
     { label: "100K", caption: "Subscribers", threshold: 100000 },
     { label: "500K", caption: "Subscribers", threshold: 500000 },
     { label: "1M",   caption: "Subscribers", threshold: 1000000 },
+    { label: "5M",   caption: "Subscribers", threshold: 5000000 },
   ],
   theme:               "gold",
   showSafeArea:        false,
   showProgressPercent: false,
 };
 
-// 鈹€鈹€ Config loader 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Config loader ─────────────────────────────────────────────────────────
 async function loadConfig() {
   // Allow inline override via ?data=<url-encoded-json>
   const params = new URLSearchParams(location.search);
@@ -79,7 +80,7 @@ function deepMerge(base, over) {
   return out;
 }
 
-// 鈹€鈹€ DOM helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── DOM helpers ───────────────────────────────────────────────────────────
 function setText(sel, text) {
   const el = document.querySelector(sel);
   if (el) el.textContent = text;
@@ -102,7 +103,7 @@ function escHtml(str) {
     .replace(/>/g, "&gt;");
 }
 
-// 鈹€鈹€ Social icons factory 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Social icons factory ──────────────────────────────────────────────────
 const SOCIAL_SVGS = {
   youtube:   `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-1.3C16.1 2.8 12 2.8 12 2.8s-4.1 0-6.8.2c-.6.1-1.9.1-3 1.3C1.3 5 1 7 1 7S.7 9.1.7 11.2v2c0 2.1.3 4.2.3 4.2S1.3 19.6 2.2 20.4c1.1 1.2 2.6 1.1 3.3 1.2C7.6 21.8 12 21.8 12 21.8s4.1 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.1.3-4.2v-2C23.3 9.1 23 7 23 7zm-13.5 8.5V8.8l8 3.4-8 3.3z"/></svg>`,
   instagram: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2c3.2 0 3.6 0 4.9.1 3.3.2 4.8 1.7 5 5 .1 1.3.1 1.6.1 4.8 0 3.2 0 3.6-.1 4.8-.2 3.3-1.7 4.8-5 5-1.3.1-1.6.1-4.9.1-3.2 0-3.6 0-4.8-.1-3.3-.2-4.8-1.7-5-5C2.1 15.7 2 15.3 2 12c0-3.2 0-3.6.1-4.8.2-3.3 1.7-4.8 5-5C8.4 2.1 8.8 2.2 12 2.2zm0 1.8c-3.2 0-3.5 0-4.8.1-2.3.1-3.3 1.2-3.5 3.5-.1 1.2-.1 1.6-.1 4.7s0 3.5.1 4.7c.1 2.3 1.2 3.3 3.5 3.5 1.2.1 1.5.1 4.8.1s3.5 0 4.8-.1c2.3-.1 3.3-1.2 3.5-3.5.1-1.2.1-1.5.1-4.7s0-3.5-.1-4.7c-.1-2.3-1.2-3.3-3.5-3.5C15.5 4 15.2 4 12 4zm0 3a5 5 0 1 1 0 10A5 5 0 0 1 12 7zm0 1.8a3.2 3.2 0 1 0 0 6.5 3.2 3.2 0 0 0 0-6.5zM17.2 6a1.2 1.2 0 1 1 0 2.4A1.2 1.2 0 0 1 17.2 6z"/></svg>`,
@@ -127,6 +128,7 @@ function paintSocialIcons(social) {
     });
   container.replaceChildren(...links);
 }
+
 function makeBadge(item, i) {
   const el = document.createElement("div");
   el.className = `badge${item.unlocked ? " is-unlocked" : ""}`;
@@ -156,12 +158,12 @@ function makeBadge(item, i) {
   return el;
 }
 
-// 鈹€鈹€ Scale safe-area to fit viewport (kept for backward compat) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Scale safe-area to fit viewport ──────────────────────────────────────
 function updateScale() {
-  // safe-area now uses 100% width 鈥?no transform needed
+  // safe-area now uses 100% width — no transform needed
 }
 
-// 鈹€鈹€ Main paint function 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Main paint function ───────────────────────────────────────────────────
 function paint(cfg) {
   const state = computeBannerState(cfg);
 
@@ -180,7 +182,7 @@ function paint(cfg) {
   setText("[data-brand-line1]", cfg.brand.brandLine1);
   setText("[data-brand-line2]", cfg.brand.brandLine2);
 
-  // Slogan 鈥?accent word highlighted
+  // Slogan — accent word highlighted
   const sloganEl = document.querySelector("[data-slogan]");
   if (sloganEl) {
     const text   = cfg.brand.slogan  ?? "Every Play Has A Story";
@@ -201,14 +203,14 @@ function paint(cfg) {
   setHTML("[data-mission-title]",    cfg.mission.title);
 
   // Live numbers
-  setText("[data-subs]",             state.formatted.subscribers);   // 46812 (no comma)
+  setText("[data-subs]",             state.formatted.subscribers);
   setText("[data-subscribers-label]",cfg.mission.subscribersLabel ?? "Subscribers");
   setText("[data-next-goal-label]",  cfg.mission.nextGoalLabel    ?? "Next Goal");
   setText("[data-next-goal]",        state.formatted.nextGoal);
   setText("[data-remaining]",        state.formatted.toNext);
   setText("[data-cta]",              cfg.mission.cta);
 
-  // Progress bar 鈥?uses pctToNext (progress within current segment, not overall)
+  // Progress bar — uses pctToNext (progress within current segment, not overall)
   const fill = document.querySelector("[data-progress-fill]");
   if (fill) {
     fill.style.width = "0%";
@@ -219,10 +221,13 @@ function paint(cfg) {
     });
   }
 
-  // Achievements badges
+  // Achievements badges — set CSS grid column count from config
+  const badgeCount = cfg.v2Layout?.badgeRow?.count ?? cfg.achievements?.length ?? 8;
+  document.documentElement.style.setProperty("--badge-count", String(badgeCount));
   const grid = document.querySelector("[data-achievements]");
   if (grid) {
-    grid.replaceChildren(...state.achievements.map(makeBadge));
+    const displayBadges = state.achievements.slice(0, badgeCount);
+    grid.replaceChildren(...displayBadges.map(makeBadge));
   }
 
   // Social icons
@@ -231,6 +236,6 @@ function paint(cfg) {
   updateScale();
 }
 
-// 鈹€鈹€ Boot 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// ── Boot ──────────────────────────────────────────────────────────────────
 window.addEventListener("resize", updateScale, { passive: true });
 loadConfig().then(paint);
