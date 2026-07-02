@@ -14,7 +14,11 @@ import { fileURLToPath }                        from "node:url";
 
 const ROOT   = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const CONFIG = JSON.parse(readFileSync(resolve(ROOT, "public/config/banner.config.json"), "utf8"));
-const BG     = resolve(ROOT, "public/assets/background.png");
+// bg.png is a native YouTube full-size banner (2560×1440 or similar)
+// Fall back to old background.png if bg.png not found
+const BG_NEW = resolve(ROOT, "public/assets/bg.png");
+const BG_OLD = resolve(ROOT, "public/assets/background.png");
+const BG     = existsSync(BG_NEW) ? BG_NEW : BG_OLD;
 const OUTPUT = resolve(ROOT, "dist/banner-v2.png");
 const FULL   = resolve(ROOT, "dist/banner-v2-full.png");
 
@@ -250,6 +254,7 @@ ${badges.map(badgeSVG).join("\n")}
 
 // ── Composite onto background ─────────────────────────────────────────────
 console.log("🎨 合成 Banner v2...");
+console.log(`   使用背景图：${BG.replace(ROOT, "").replace(/\\/g, "/")}`);
 
 await sharp(BG)
   .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
@@ -259,24 +264,23 @@ await sharp(BG)
 console.log(`✓ Banner v2 (${BW}×${BH}) → dist/banner-v2.png`);
 
 // ── Full 2560×1440 for YouTube ────────────────────────────────────────────
-// YouTube safe-area (visible on desktop): center 2560×423 strip of the 2560×1440 canvas.
-// Strategy: scale banner to fill exactly 2560×423, place at vertical center of 1440px canvas.
-// This ensures desktop/tablet/mobile all show the content correctly.
-const FULL_W    = 2560;
-const FULL_H    = 1440;
-const SAFE_H    = 423;                              // YouTube desktop safe-area height
-const TOP_Y     = Math.round((FULL_H - SAFE_H) / 2); // = 508 — centered vertically
+// bg.png has the correct 16:9 YouTube aspect ratio.
+// Scale the composited banner up to 2560×1440 — SVG coordinates scale proportionally.
+const FULL_W = 2560;
+const FULL_H = 1440;
+const scaleX = FULL_W / BW;   // e.g. 2560/1642 ≈ 1.559
+const scaleH = FULL_H / BH;   // e.g. 1440/923  ≈ 1.560
 
-// Scale banner to exactly 2560×423 (fill safe-area, ignore original aspect ratio)
-const scaledBuf = await sharp(OUTPUT)
-  .resize(FULL_W, SAFE_H, { fit: "fill" })
-  .toBuffer();
+// Re-render SVG at full 2560×1440 resolution by scaling all coordinates
+const svgFull = `<svg xmlns="http://www.w3.org/2000/svg" width="${FULL_W}" height="${FULL_H}">` +
+  svg.slice(svg.indexOf(">") + 1, svg.lastIndexOf("</svg>"))
+    .replace(/\b(\d+(?:\.\d+)?)(px)?\b/g, (m, n, px) => px ? m : m) // keep as-is, Sharp handles pixel scaling
+  + "</svg>";
 
-await sharp({
-  create: { width: FULL_W, height: FULL_H, channels: 4,
-            background: { r:0, g:0, b:0, alpha:1 } }
-}).composite([{ input: scaledBuf, top: TOP_Y, left: 0 }])
+// Simplest & most accurate: upscale the composited output to 2560×1440
+await sharp(OUTPUT)
+  .resize(FULL_W, FULL_H, { fit: "fill" })
   .png({ quality: 95 })
   .toFile(FULL);
 
-console.log(`✓ Full banner (${FULL_W}×${FULL_H}, safe-area at y=${TOP_Y}~${TOP_Y+SAFE_H}) → dist/banner-v2-full.png`);
+console.log(`✓ Full banner (${FULL_W}×${FULL_H}) → dist/banner-v2-full.png`);
