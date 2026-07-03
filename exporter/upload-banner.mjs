@@ -24,7 +24,11 @@ import { fileURLToPath }            from "node:url";
 import { chromium }                 from "playwright";
 
 const ROOT          = resolve(fileURLToPath(new URL("../", import.meta.url)));
-const BANNER_FILE   = resolve(process.env.BANNER_FILE ?? "dist/banner.png");
+// Default to v2 (Sharp) output; fall back to v1 if v2 doesn't exist
+const _v2File       = resolve(ROOT, "dist/banner-v2.png");
+const _v1File       = resolve(ROOT, "dist/banner.png");
+const BANNER_FILE   = resolve(process.env.BANNER_FILE
+  ?? (existsSync(_v2File) ? "dist/banner-v2.png" : "dist/banner.png"));
 // Use full 2560×1440 for upload if available (YouTube requires 16:9 min 2048×1152)
 const BANNER_FULL   = BANNER_FILE.replace(".png", "-full.png");
 const UPLOAD_FILE   = existsSync(BANNER_FULL) ? BANNER_FULL : BANNER_FILE;
