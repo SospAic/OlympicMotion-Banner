@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("./public/", import.meta.url));
-const port = Number(process.env.PORT || 4173);
+const port = Number(process.env.PORT || 38291);
 
 const mime = {
   ".html": "text/html; charset=utf-8",

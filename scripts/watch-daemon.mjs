@@ -50,7 +50,7 @@ loadEnv();
 const API_KEY       = process.env.YOUTUBE_API_KEY;
 const CHANNEL_ID    = process.env.YOUTUBE_CHANNEL_ID;
 const POLL_MIN      = Math.max(1, Number(process.env.POLL_INTERVAL_MINUTES ?? 5));
-const WEBHOOK_PORT  = Number(process.env.WEBHOOK_PORT ?? 4174);
+const WEBHOOK_PORT  = Number(process.env.WEBHOOK_PORT ?? 47832);
 const PUBLIC_URL    = process.env.WEBHOOK_PUBLIC_URL ?? "";
 const STATE_FILE    = resolve(ROOT, ".session/daemon-state.json");
 

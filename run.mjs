@@ -140,7 +140,7 @@ function updateConfig(subs) {
 
 // ── Step 3: Start local server ────────────────────────────────────────────
 async function startServer() {
-  const port      = process.env.PORT ?? "4173";
+  const port      = process.env.PORT ?? "38291";
   const serverUrl = `http://localhost:${port}/`;
 
   // Check if already running

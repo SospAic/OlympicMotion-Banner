@@ -30,7 +30,7 @@ import { chromium }                                   from "playwright";
 const ROOT         = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_DIR  = resolve(ROOT, ".session");
 const SESSION_FILE = resolve(SESSION_DIR, "youtube-session.json");
-const CALLBACK_PORT = 8080;
+const CALLBACK_PORT = Number(process.env.OAUTH_CALLBACK_PORT ?? 52947);
 
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube",

@@ -17,7 +17,7 @@ import { chromium }              from "playwright";
 
 const ROOT       = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const OUTPUT     = resolve(process.argv[2] ?? "dist/banner.png");
-const TARGET_URL = process.env.BANNER_URL ?? "http://localhost:4173/";
+const TARGET_URL = process.env.BANNER_URL ?? "http://localhost:38291/";
 
 // Ensure output directory exists
 mkdirSync(dirname(OUTPUT), { recursive: true });

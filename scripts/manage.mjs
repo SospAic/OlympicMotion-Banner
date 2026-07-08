@@ -397,7 +397,7 @@ async function menuDaemon() {
       break;
     case "6": {
       const env  = loadEnv();
-      const port = env.WEBHOOK_PORT ?? "4174";
+      const port = env.WEBHOOK_PORT ?? "47832";
       console.log();
       await run("curl", ["-s", `http://localhost:${port}/health`]);
       console.log();

@@ -113,9 +113,9 @@ while (true) {
   console.log(`\n✓ 域名：${domain}`);
 
   // Get banner port
-  const bannerPort  = env.PORT ?? "4173";
-  const webhookPort = env.WEBHOOK_PORT ?? "4174";
-  const oauthPort   = "8080";
+  const bannerPort  = env.PORT ?? "38291";
+  const webhookPort = env.WEBHOOK_PORT ?? "47832";
+  const oauthPort   = env.OAUTH_CALLBACK_PORT ?? "52947";
 
   // Build Caddyfile
   const caddyfile = `# OlympicMotion Banner Engine — Caddy 配置
