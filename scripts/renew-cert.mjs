@@ -120,11 +120,8 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
       "-d", domain,
       "--server", "letsencrypt",
     ];
-    // Set DNS provider env vars
     for (const [k, v] of Object.entries(dnsEnvVars)) process.env[k] = v;
-  } else {
-    // HTTP-01: webroot mode — Caddy serves /.well-known/acme-challenge/
-    // This avoids port 80 conflict with Caddy standalone listener
+  } else if (method === "webroot") {
     const webroot = "/var/www/acme-challenge";
     mkdirSync(webroot, { recursive: true });
     issueArgs = [
@@ -132,8 +129,16 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
       "-d", domain,
       "--server", "letsencrypt",
     ];
-    console.log(Y(`  ℹ  使用 webroot 模式，确保 Caddy 已配置 /.well-known/acme-challenge/* 路由`));
-    console.log(`     Caddyfile 中需添加：handle /.well-known/acme-challenge/* { root * ${webroot}; file_server }`);
+    console.log(Y(`  ℹ  webroot 模式：确保 Caddy 已将 /.well-known/acme-challenge/* 路由到 ${webroot}`));
+  } else {
+    // standalone: temporarily stop Caddy, use port 80, restart after
+    console.log(Y("  ⏸  正在临时停止 Caddy（约 10 秒）..."));
+    try { execSync("systemctl stop caddy 2>/dev/null || true"); } catch {}
+    issueArgs = [
+      "--issue", "--standalone", "--httpport", "80",
+      "-d", domain,
+      "--server", "letsencrypt",
+    ];
   }
 
   console.log(`\n🔐 正在申请证书（${method === "dns" ? "DNS-01" : "HTTP-01 standalone"}）...`);
@@ -144,15 +149,26 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   }
 
   // Install cert to target path
+  const reloadCmd = method === "standalone"
+    ? "systemctl start caddy 2>/dev/null || true"
+    : "systemctl reload caddy 2>/dev/null || true";
   const installArgs = [
     "--install-cert", "-d", domain,
-    "--cert-file",   `${certDir}/cert.crt`,
-    "--key-file",    `${certDir}/private.key`,
+    "--cert-file",      `${certDir}/cert.crt`,
+    "--key-file",       `${certDir}/private.key`,
     "--fullchain-file", `${certDir}/fullchain.pem`,
-    "--reloadcmd",   "systemctl reload caddy 2>/dev/null || true",
+    "--reloadcmd",      reloadCmd,
   ];
   const installCode = await run(acme, installArgs);
-  if (installCode !== 0) throw new Error("证书安装失败");
+  if (installCode !== 0) {
+    // Make sure Caddy is back up even if install failed
+    if (method === "standalone") {
+      try { execSync("systemctl start caddy 2>/dev/null || true"); } catch {}
+      console.log(G("  ✓ Caddy 已重新启动"));
+    }
+    throw new Error("证书安装失败");
+  }
+  if (method === "standalone") console.log(G("  ✓ Caddy 已重新启动"));
 
   return {
     certFile: `${certDir}/cert.crt`,
@@ -440,10 +456,11 @@ async function flowAcme(env, type) {
   const certDir = (await ask(`  证书保存目录 [${k.defaultDir}]：`)) || k.defaultDir;
 
   console.log(`\n  验证方式：`);
-  console.log(`  ${C("1")}  HTTP-01（需要 80 端口在申请期间可用）`);
-  console.log(`  ${C("2")}  DNS-01（无需 80 端口，支持通配符）\n`);
+  console.log(`  ${C("1")}  standalone（临时停止 Caddy，独占 80 端口，几秒后自动重启）${G("[推荐]")}`);
+  console.log(`  ${C("2")}  webroot（Caddy 代理验证，不停服务，需 Caddy 已监听 80）`);
+  console.log(`  ${C("3")}  DNS-01（无需 80 端口，支持通配符，需 DNS 提供商 API）\n`);
   const methodChoice = (await ask("  请选择 [1]：")) || "1";
-  const method = methodChoice === "2" ? "dns" : "http";
+  const method = methodChoice === "3" ? "dns" : methodChoice === "2" ? "webroot" : "standalone";
 
   let dnsProvider = "";
   const dnsEnvVars = {};
