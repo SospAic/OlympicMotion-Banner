@@ -222,7 +222,7 @@ async function renewOnly() {
   const ts  = () => `[${new Date().toISOString()}]`;
 
   // ── Banner cert ──────────────────────────────────────────────────────────
-  const bannerCert   = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
+  const bannerCert   = env.SSL_CERT_FILE ?? "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem";
   const bannerDomain = env.DOMAIN ?? "";
   console.log(`${ts()} 检查 Banner 证书续期...`);
   const bannerInfo = checkCertExpiry(bannerCert);
@@ -288,7 +288,8 @@ async function main() {
       if (!info) { console.log(Y(`⚠  ${label} 证书不存在：${cert}`)); continue; }
       const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
       console.log(`${label} 证书：${cert}`);
-      console.log(`  到期：${info.expiry.toLocaleDateString("zh-CN")}  ${color(`剩余 ${info.daysLeft} 天`)}`);
+      const daysTxt = info.daysLeft >= 0 ? `剩余 ${info.daysLeft} 天` : `已过期 ${Math.abs(info.daysLeft)} 天`;
+      console.log(`  到期：${info.expiry.toLocaleDateString("zh-CN")}  ${color(daysTxt)}`);
     }
     return;
   }
@@ -309,20 +310,23 @@ async function main() {
     const info = checkCertExpiry(cert);
     if (info) {
       const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
-      console.log(`  ${label} 证书：${color(`${info.expiry.toLocaleDateString("zh-CN")} (剩余 ${info.daysLeft} 天)`)}`);
+      const daysTxt = info.daysLeft >= 0
+        ? `剩余 ${info.daysLeft} 天`
+        : `已过期 ${Math.abs(info.daysLeft)} 天`;
+      console.log(`  ${label} 证书：${color(`${info.expiry.toLocaleDateString("zh-CN")} (${daysTxt})`)}`);
     } else {
       console.log(`  ${label} 证书：${Y("文件不存在")} ${D(cert)}`);
     }
   }
   console.log();
 
-  console.log(`  ${B(cyan("── Banner 证书（Caddy HTTPS）──"))}`);
+  console.log(`  ${B(C("── Banner 证书（Caddy HTTPS）──"))}`);
   console.log(`  ${C("1")}  Banner 证书 — acme.sh 申请 ${G("[推荐]")}`);
   console.log(`  ${C("2")}  Banner 证书 — certbot 申请`);
   console.log(`  ${C("3")}  Banner 证书 — 手动填写路径（已有文件）`);
   console.log(`  ${C("4")}  Banner 证书 — 检查到期 / 立即续期`);
   console.log();
-  console.log(`  ${B(cyan("── 节点证书（代理/其他服务）──"))}`);
+  console.log(`  ${B(C("── 节点证书（代理/其他服务）──"))}`);
   console.log(`  ${C("5")}  节点证书 — acme.sh 申请`);
   console.log(`  ${C("6")}  节点证书 — certbot 申请`);
   console.log(`  ${C("7")}  节点证书 — 手动填写路径（已有文件）`);
@@ -391,9 +395,10 @@ async function flowCheck(env, type) {
   const info = checkCertExpiry(cert);
   if (!info) { console.log(R(`\n  ❌ 无法读取 ${k.label}：${cert}`)); return; }
   const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
+  const daysTxt = info.daysLeft >= 0 ? `剩余 ${info.daysLeft} 天` : `已过期 ${Math.abs(info.daysLeft)} 天`;
   console.log(`\n  ${k.label} 路径：${D(cert)}`);
   console.log(`  到期时间：${info.expiry.toLocaleDateString("zh-CN")}`);
-  console.log(`  ${color(`剩余 ${info.daysLeft} 天`)}`);
+  console.log(`  ${color(daysTxt)}`);
 
   if (info.daysLeft <= 30) {
     const confirm = (await ask("\n  证书即将到期，立即续期？(y/N)：")).toLowerCase();
