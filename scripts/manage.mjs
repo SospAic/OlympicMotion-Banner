@@ -694,6 +694,142 @@ async function fetchSubsPreview() {
   } catch { return "获取失败"; }
 }
 
+// ── Create new channel ────────────────────────────────────────────────────
+async function menuCreateChannel() {
+  clear();
+  console.log(bold(cyan("\n  ╔══════════════════════════════════════════╗")));
+  console.log(bold(cyan("  ║  新增频道                                 ║")));
+  console.log(bold(cyan("  ╚══════════════════════════════════════════╝\n")));
+
+  // ── Step 1: Channel identifier ──────────────────────────────────────────
+  let name = "";
+  while (!name) {
+    const raw = (await ask("  频道标识符（英文小写+连字符，如 mychannel）：")).trim();
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(raw)) {
+      console.log(red("  格式错误，只允许小写字母、数字和连字符"));
+    } else if (listChannels().includes(raw)) {
+      console.log(yellow(`  频道 "${raw}" 已存在`));
+    } else {
+      name = raw;
+    }
+  }
+
+  // ── Step 2: Display name ────────────────────────────────────────────────
+  const channelName = (await ask(`  频道显示名称（如 My Channel）[${name}]：`)) || name;
+
+  // ── Step 3: Subscription goal ───────────────────────────────────────────
+  const goalRaw = (await ask("  订阅目标数（如 1000000）[1000000]：")) || "1000000";
+  const goal    = parseInt(goalRaw.replace(/[^0-9]/g, ""), 10) || 1000000;
+
+  // ── Step 4: YouTube credentials ─────────────────────────────────────────
+  console.log(`\n  ${dim("YouTube 凭据（可留空后手动编辑 .env.channel）")}`);
+  const ytApiKey    = (await ask("  YOUTUBE_API_KEY（留空跳过）：")).trim();
+  const ytChannelId = (await ask("  YOUTUBE_CHANNEL_ID（以 UC 开头，留空跳过）：")).trim();
+  const googleClientId     = (await ask("  GOOGLE_CLIENT_ID（留空跳过）：")).trim();
+  const googleClientSecret = (await ask("  GOOGLE_CLIENT_SECRET（留空跳过）：")).trim();
+
+  // ── Step 5: Domain / URL ─────────────────────────────────────────────────
+  const bannerUrl     = (await ask("  BANNER_URL（如 https://ch2.example.com，留空跳过）：")).trim();
+  const webhookUrl    = bannerUrl ? `${bannerUrl}/webhook` : "";
+
+  // ── Step 6: Generate random high ports ──────────────────────────────────
+  function randPort(min = 40000, max = 62000) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+  // Ensure no collision with existing channel ports
+  const usedPorts = new Set();
+  for (const ch of listChannels()) {
+    try {
+      const { channelDescriptor } = await import("./channel.mjs");
+      const desc = channelDescriptor(ch);
+      if (existsSync(desc.envPath)) {
+        const lines = readFileSync(desc.envPath, "utf8").split("\n");
+        for (const l of lines) {
+          const m = l.match(/^CHANNEL_(?:PORT|WEBHOOK_PORT|OAUTH_PORT)=(\d+)/);
+          if (m) usedPorts.add(Number(m[1]));
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  let port, webhookPort, oauthPort;
+  do { port = randPort(); } while (usedPorts.has(port));
+  usedPorts.add(port);
+  do { webhookPort = randPort(); } while (usedPorts.has(webhookPort));
+  usedPorts.add(webhookPort);
+  do { oauthPort = randPort(); } while (usedPorts.has(oauthPort));
+
+  // ── Step 7: Write files ──────────────────────────────────────────────────
+  const { mkdirSync, copyFileSync } = await import("node:fs");
+  const channelDir = resolve(ROOT, "channels", name);
+  mkdirSync(channelDir, { recursive: true });
+
+  // config.json — copy template from olympicmotion or generate minimal
+  const templateConfig = resolve(ROOT, "channels/olympicmotion/config.json");
+  const legacyConfig   = resolve(ROOT, "public/config/banner.config.json");
+  const srcConfig      = existsSync(templateConfig) ? templateConfig : legacyConfig;
+  let cfg = {};
+  try { cfg = JSON.parse(readFileSync(srcConfig, "utf8")); } catch {}
+  cfg.brand  = { ...cfg.brand,  channelName };
+  cfg.mission= { ...cfg.mission, goal,
+    title: `Road To <span>${goal >= 1000000 ? (goal/1000000).toFixed(0)+"M" : (goal/1000).toFixed(0)+"K"}</span> Champions` };
+  cfg.data   = { subs: 0 };
+  writeFileSync(resolve(channelDir, "config.json"), JSON.stringify(cfg, null, 2) + "\n");
+
+  // bg.png — copy template (user can replace later)
+  const templateBg = resolve(ROOT, "channels/olympicmotion/bg.png");
+  const legacyBg   = resolve(ROOT, "public/assets/bg.png");
+  const srcBg      = existsSync(templateBg) ? templateBg : legacyBg;
+  if (existsSync(srcBg)) {
+    try { copyFileSync(srcBg, resolve(channelDir, "bg.png")); } catch {}
+  }
+
+  // logo.svg — copy template
+  const templateLogo = resolve(ROOT, "channels/olympicmotion/logo.svg");
+  const legacyLogo   = resolve(ROOT, "public/assets/logo.svg");
+  const srcLogo      = existsSync(templateLogo) ? templateLogo : legacyLogo;
+  if (existsSync(srcLogo)) {
+    try { copyFileSync(srcLogo, resolve(channelDir, "logo.svg")); } catch {}
+  }
+
+  // .env.channel
+  const envLines = [
+    `# Channel: ${name}`,
+    `# Created: ${new Date().toISOString()}`,
+    ``,
+    `# Auto-generated high-random ports`,
+    `CHANNEL_PORT=${port}`,
+    `CHANNEL_WEBHOOK_PORT=${webhookPort}`,
+    `CHANNEL_OAUTH_PORT=${oauthPort}`,
+    `CHANNEL_PM2_NAME=banner-daemon-${name}`,
+    ``,
+    `# YouTube credentials`,
+    `YOUTUBE_API_KEY=${ytApiKey}`,
+    `YOUTUBE_CHANNEL_ID=${ytChannelId}`,
+    `GOOGLE_CLIENT_ID=${googleClientId}`,
+    `GOOGLE_CLIENT_SECRET=${googleClientSecret}`,
+    `GOOGLE_REFRESH_TOKEN=`,
+    `SESSION_ENCRYPTION_KEY=`,
+    `ACME_EMAIL=`,
+    bannerUrl   ? `BANNER_URL=${bannerUrl}` : `BANNER_URL=`,
+    webhookUrl  ? `WEBHOOK_PUBLIC_URL=${webhookUrl}` : `WEBHOOK_PUBLIC_URL=`,
+  ];
+  writeFileSync(resolve(channelDir, ".env.channel"), envLines.join("\n") + "\n");
+
+  // .gitignore — ignore .env.channel
+  writeFileSync(resolve(channelDir, ".gitignore"), ".env.channel\n");
+
+  console.log(green(`\n  ✅ 频道 "${name}" 已创建！`));
+  console.log(`\n  路径：${channelDir}`);
+  console.log(`  端口：${dim(`服务=${port}  Webhook=${webhookPort}  OAuth=${oauthPort}`)}`);
+  console.log(`  PM2 ：${dim(`banner-daemon-${name}`)}`);
+  console.log(yellow(`\n  后续操作：`));
+  console.log(`  1. 替换 ${channelDir}/bg.png（频道背景图）`);
+  console.log(`  2. 编辑 ${channelDir}/config.json（调整坐标和样式）`);
+  console.log(`  3. 补全 ${channelDir}/.env.channel（GOOGLE_REFRESH_TOKEN 等）`);
+  console.log(`  4. 运行：node scripts/manage.mjs --channel=${name}`);
+  await pause();
+}
+
 // ── Channel selector ──────────────────────────────────────────────────────
 /**
  * Show an interactive channel selector and return the chosen channel name.
@@ -708,11 +844,16 @@ async function selectChannelInteractive(channels) {
   channels.forEach((ch, i) => {
     console.log(`  ${cyan(String(i + 1))}  ${ch}`);
   });
+  console.log(`  ${cyan("N")}  新增频道`);
   console.log();
-  const choice = await ask(`  请选择频道 [1-${channels.length}]：`);
+  const choice = await ask(`  请选择 [1-${channels.length} / N]：`);
+  if (choice.trim().toUpperCase() === "N") {
+    await menuCreateChannel();
+    // After creation re-list channels
+    return null; // signal caller to re-run selector
+  }
   const idx = parseInt(choice.trim(), 10) - 1;
   if (idx >= 0 && idx < channels.length) return channels[idx];
-  // Default to first channel on invalid input
   return channels[0];
 }
 
@@ -739,7 +880,6 @@ try {
   const channels = listChannels();
 
   if (channels.length > 0) {
-    // Try --channel=name arg first
     const argName = parseChannelArg();
     if (argName) {
       // Skip selector — use named channel
@@ -750,8 +890,12 @@ try {
       const { channelDescriptor } = await import("./channel.mjs");
       ACTIVE_CHANNEL = channelDescriptor(channels[0]);
     } else {
-      // Multiple channels — show selector
-      const chosen = await selectChannelInteractive(channels);
+      // Multiple channels — show selector (loop until a real channel is chosen)
+      let chosen = null;
+      while (!chosen) {
+        const current = listChannels();
+        chosen = await selectChannelInteractive(current);
+      }
       const { channelDescriptor } = await import("./channel.mjs");
       ACTIVE_CHANNEL = channelDescriptor(chosen);
     }
