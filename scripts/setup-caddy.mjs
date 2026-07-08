@@ -135,6 +135,12 @@ ${domain}:${caddyPort} {
     # 加载外部证书（acme.sh / certbot 签发，无需 80 端口）
     tls ${certFile} ${keyFile}
 
+    # ACME webroot 验证（acme.sh --webroot 模式续期用，不占用 80 端口）
+    handle /.well-known/acme-challenge/* {
+        root * /var/www/acme-challenge
+        file_server
+    }
+
     # OAuth 授权回调（用于 Google OAuth 登录）
     handle /oauth/callback* {
         reverse_proxy localhost:${oauthPort}
@@ -189,8 +195,10 @@ ${domain}:${caddyPort} {
   writeFileSync(CADDY_FILE, caddyfile);
   console.log("✓ Caddyfile 已写入");
 
-  // Create log dir
+  // Create log dir and webroot dir for ACME challenge
   execSync("mkdir -p /var/log/caddy");
+  execSync("mkdir -p /var/www/acme-challenge");
+  console.log("✓ webroot 目录已创建：/var/www/acme-challenge");
 
   // Reload Caddy
   console.log("\n重载 Caddy...");

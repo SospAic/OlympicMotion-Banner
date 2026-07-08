@@ -123,12 +123,17 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
     // Set DNS provider env vars
     for (const [k, v] of Object.entries(dnsEnvVars)) process.env[k] = v;
   } else {
-    // HTTP-01: standalone on port 80
+    // HTTP-01: webroot mode — Caddy serves /.well-known/acme-challenge/
+    // This avoids port 80 conflict with Caddy standalone listener
+    const webroot = "/var/www/acme-challenge";
+    mkdirSync(webroot, { recursive: true });
     issueArgs = [
-      "--issue", "--standalone", "--httpport", "80",
+      "--issue", "--webroot", webroot,
       "-d", domain,
       "--server", "letsencrypt",
     ];
+    console.log(Y(`  ℹ  使用 webroot 模式，确保 Caddy 已配置 /.well-known/acme-challenge/* 路由`));
+    console.log(`     Caddyfile 中需添加：handle /.well-known/acme-challenge/* { root * ${webroot}; file_server }`);
   }
 
   console.log(`\n🔐 正在申请证书（${method === "dns" ? "DNS-01" : "HTTP-01 standalone"}）...`);
