@@ -107,7 +107,7 @@ async function installAcme(email) {
 }
 
 // ── Issue cert via acme.sh ─────────────────────────────────────────────────
-async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVars }) {
+async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVars, type = "banner" }) {
   const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
   if (!existsSync(acme)) await installAcme(email);
 
@@ -162,16 +162,36 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   }
 
   // Install cert to target path
-  const reloadCmd = method === "standalone"
-    ? `chmod 644 ${certDir}/private.key ${certDir}/privkey.pem 2>/dev/null; systemctl start caddy 2>/dev/null || true`
-    : `chmod 644 ${certDir}/private.key ${certDir}/privkey.pem 2>/dev/null; systemctl reload caddy 2>/dev/null || true`;
+  // Node cert: always write to the fixed paths /root/ygkkkca/ (required by external scripts)
+  // Banner cert: write to certDir, fix permissions so caddy user can read
+  const NODE_CERT = "/root/ygkkkca/cert.crt";
+  const NODE_KEY  = "/root/ygkkkca/private.key";
+  const NODE_FULL = "/root/ygkkkca/fullchain.pem";
+
+  const outCert = type === "node" ? NODE_CERT : `${certDir}/cert.crt`;
+  const outKey  = type === "node" ? NODE_KEY  : `${certDir}/private.key`;
+  const outFull = type === "node" ? NODE_FULL : `${certDir}/fullchain.pem`;
+
+  let reloadCmd;
+  if (type === "node") {
+    const envData = loadEnv();
+    reloadCmd = envData.NODE_RELOAD_CMD
+      ? `chmod 644 ${NODE_KEY} 2>/dev/null; ${envData.NODE_RELOAD_CMD}`
+      : `chmod 644 ${NODE_KEY} 2>/dev/null; echo '节点证书已更新'`;
+  } else if (method === "standalone") {
+    reloadCmd = `chmod 644 ${outKey} 2>/dev/null; systemctl start caddy 2>/dev/null || true`;
+  } else {
+    reloadCmd = `chmod 644 ${outKey} 2>/dev/null; systemctl reload caddy 2>/dev/null || true`;
+  }
+
+  mkdirSync(type === "node" ? "/root/ygkkkca" : certDir, { recursive: true });
 
   // Use --ecc flag since acme.sh defaults to ECC (P-256) which stores in domain_ecc/
   const installArgs = [
     "--install-cert", "-d", domain, "--ecc",
-    "--cert-file",      `${certDir}/cert.crt`,
-    "--key-file",       `${certDir}/private.key`,
-    "--fullchain-file", `${certDir}/fullchain.pem`,
+    "--cert-file",      outCert,
+    "--key-file",       outKey,
+    "--fullchain-file", outFull,
     "--reloadcmd",      reloadCmd,
   ];
   const installCode = await run(acme, installArgs);
@@ -186,8 +206,8 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   if (method === "standalone") console.log(G("  ✓ Caddy 已重新启动"));
 
   return {
-    certFile: `${certDir}/cert.crt`,
-    keyFile:  `${certDir}/private.key`,
+    certFile: outCert,
+    keyFile:  outKey,
   };
 }
 
@@ -292,37 +312,58 @@ async function renewOnly() {
   }
 
   // ── Node cert ────────────────────────────────────────────────────────────
-  // Node cert is managed by an external script that writes to NODE_SSL_CERT_FILE.
-  // We only monitor the file's mtime — if it changed since last check, run NODE_RELOAD_CMD.
-  const nodeCert      = env.NODE_SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
-  const nodeKey       = env.NODE_SSL_KEY_FILE  ?? "/root/ygkkkca/private.key";
-  const nodeReload    = env.NODE_RELOAD_CMD    ?? "";
+  // Node cert is managed by acme.sh AND monitored for external changes.
+  // Fixed output paths: /root/ygkkkca/cert.crt + /root/ygkkkca/private.key
+  const NODE_CERT     = "/root/ygkkkca/cert.crt";
+  const NODE_KEY      = "/root/ygkkkca/private.key";
+  const nodeCert      = env.NODE_SSL_CERT_FILE ?? NODE_CERT;
+  const nodeDomain    = env.NODE_DOMAIN ?? "";
+  const nodeReload    = env.NODE_RELOAD_CMD ?? "";
   const lastHandled   = Number(env.NODE_CERT_LAST_HANDLED ?? "0");
 
   if (existsSync(nodeCert)) {
-    console.log(`${ts()} 检查节点证书文件变更...`);
+    console.log(`${ts()} 检查节点证书...`);
     const info = checkCertExpiry(nodeCert);
     if (info) {
       const days = info.daysLeft >= 0 ? `剩余 ${info.daysLeft} 天` : `已过期 ${Math.abs(info.daysLeft)} 天`;
       console.log(`  节点证书：${info.expiry.toLocaleDateString()}（${days}）`);
+
+      // Auto-renew if expiring within 30 days
+      if (info.daysLeft <= 30 && nodeDomain) {
+        const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
+        if (existsSync(acme)) {
+          console.log(`  ⏳ 即将到期，开始续期...`);
+          const code = await run(acme, ["--renew", "-d", nodeDomain, "--ecc"]);
+          if (code === 0) {
+            // Re-install to fixed paths
+            const reloadCmd = nodeReload
+              ? `chmod 644 ${NODE_KEY} 2>/dev/null; ${nodeReload}`
+              : `chmod 644 ${NODE_KEY} 2>/dev/null; echo '节点证书已更新'`;
+            await run(acme, [
+              "--install-cert", "-d", nodeDomain, "--ecc",
+              "--cert-file",      NODE_CERT,
+              "--key-file",       NODE_KEY,
+              "--fullchain-file", "/root/ygkkkca/fullchain.pem",
+              "--reloadcmd",      reloadCmd,
+            ]);
+            saveEnv("NODE_CERT_LAST_HANDLED", String(Date.now()));
+            console.log(`${ts()} ✓ 节点证书续期成功 → ${NODE_CERT}`);
+          } else {
+            console.error(`${ts()} ❌ 节点证书续期失败`);
+          }
+        }
+      }
     }
 
-    // Check if the cert file was modified after our last handled timestamp
+    // Also detect external updates (from other cert scripts)
     try {
       const { statSync } = await import("node:fs");
       const mtimeMs = statSync(nodeCert).mtimeMs;
-      if (mtimeMs > lastHandled) {
-        console.log(`  检测到节点证书文件已更新（${new Date(mtimeMs).toISOString()}）`);
-        if (nodeReload) {
-          tryExec(nodeReload);
-          console.log(`${ts()} ✓ 节点服务已重载：${nodeReload}`);
-        } else {
-          console.log(`  ℹ  NODE_RELOAD_CMD 未配置，跳过重载`);
-        }
-        // Record handled time
+      if (mtimeMs > lastHandled && nodeReload) {
+        console.log(`  检测到节点证书文件已被外部更新（${new Date(mtimeMs).toISOString()}）`);
+        tryExec(`chmod 644 ${NODE_KEY} 2>/dev/null; ${nodeReload}`);
         saveEnv("NODE_CERT_LAST_HANDLED", String(Date.now()));
-      } else {
-        console.log("  ✓ 节点证书未变更，无需处理");
+        console.log(`${ts()} ✓ 节点服务已重载`);
       }
     } catch { /* ignore */ }
   } else {
@@ -546,7 +587,7 @@ async function flowAcme(env, type) {
   }
 
   try {
-    const { certFile, keyFile } = await issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVars });
+    const { certFile, keyFile } = await issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVars, type });
     saveEnv(k.domain,   domain);
     saveEnv(k.email,    email);
     saveEnv(k.certFile, certFile);
