@@ -115,7 +115,7 @@ function getStatus() {
   // Check SSL cert expiry
   let certDaysLeft = null;
   try {
-    const certFile = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
+    const certFile = env.SSL_CERT_FILE ?? "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem";
     if (existsSync(certFile)) {
       const out = execSync(`openssl x509 -enddate -noout -in "${certFile}" 2>/dev/null`, { encoding: "utf8" }).trim();
       const match = out.match(/notAfter=(.+)/);

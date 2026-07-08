@@ -277,8 +277,12 @@ async function main() {
 
   if (process.argv.includes("--check")) {
     const env = loadEnv();
-    for (const [label, certKey] of [["Banner", "SSL_CERT_FILE"], ["节点", "NODE_SSL_CERT_FILE"]]) {
-      const cert = env[certKey];
+    const checks = [
+      ["Banner", "SSL_CERT_FILE",      "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem"],
+      ["节点",   "NODE_SSL_CERT_FILE", "/root/ygkkkca/cert.crt"],
+    ];
+    for (const [label, certKey, def] of checks) {
+      const cert = env[certKey] ?? def;
       if (!cert) continue;
       const info = checkCertExpiry(cert);
       if (!info) { console.log(Y(`⚠  ${label} 证书不存在：${cert}`)); continue; }
@@ -296,8 +300,11 @@ async function main() {
   const env = loadEnv();
 
   // Show status for both certs
-  for (const [label, certKey] of [["Banner", "SSL_CERT_FILE"], ["节点", "NODE_SSL_CERT_FILE"]]) {
-    const cert = env[certKey] ?? (certKey === "SSL_CERT_FILE" ? "/root/ygkkkca/cert.crt" : "");
+  for (const [label, certKey, def] of [
+    ["Banner", "SSL_CERT_FILE", "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem"],
+    ["节点",   "NODE_SSL_CERT_FILE", "/root/ygkkkca/cert.crt"],
+  ]) {
+    const cert = env[certKey] ?? def;
     if (!cert) { console.log(`  ${label} 证书：${D("未配置")}`); continue; }
     const info = checkCertExpiry(cert);
     if (info) {
@@ -353,7 +360,10 @@ function certKeys(type) {
     method:    "NODE_CERT_METHOD",
     email:     "ACME_EMAIL",
     label:     "节点证书",
-    defaultDir:"/root/ygkkkca-node",
+    defaultDir:"/root/ygkkkca",
+    defaultCert:"/root/ygkkkca/cert.crt",
+    defaultKey: "/root/ygkkkca/private.key",
+    defaultDomain: "ny.sospaic.top",
     reloadCmd: "NODE_RELOAD_CMD",
     defaultReload: "echo '节点证书已续期'",
   };
@@ -364,7 +374,10 @@ function certKeys(type) {
     method:    "CERT_METHOD",
     email:     "ACME_EMAIL",
     label:     "Banner证书",
-    defaultDir:"/root/ygkkkca",
+    defaultDir:"/etc/letsencrypt/live/om.sospaic.top",
+    defaultCert:"/etc/letsencrypt/live/om.sospaic.top/fullchain.pem",
+    defaultKey: "/etc/letsencrypt/live/om.sospaic.top/privkey.pem",
+    defaultDomain: "om.sospaic.top",
     reloadCmd: null,
     defaultReload: "systemctl reload caddy 2>/dev/null || true",
   };
@@ -373,7 +386,7 @@ function certKeys(type) {
 // ── Flow: check & renew ────────────────────────────────────────────────────
 async function flowCheck(env, type) {
   const k    = certKeys(type);
-  const cert = env[k.certFile] ?? (type === "banner" ? "/root/ygkkkca/cert.crt" : "");
+  const cert = env[k.certFile] ?? k.defaultCert;
   if (!cert) { console.log(Y(`\n  ⚠  ${k.label}路径未配置`)); return; }
   const info = checkCertExpiry(cert);
   if (!info) { console.log(R(`\n  ❌ 无法读取 ${k.label}：${cert}`)); return; }
@@ -407,7 +420,8 @@ async function flowAcme(env, type) {
   const k = certKeys(type);
   console.log(B(`\n  ── acme.sh 申请${k.label} ──\n`));
 
-  const domain = (await ask(`  域名 [${env[k.domain] ?? ""}]：`)) || env[k.domain] || "";
+  const domain = (await ask(`  域名 [${env[k.domain] ?? k.defaultDomain}]：`))
+    || env[k.domain] || k.defaultDomain;
   if (!domain) { console.log(R("  域名不能为空")); return; }
 
   const email = (await ask(`  邮箱 [${env[k.email] ?? ""}]：`)) || env[k.email] || "";
@@ -473,7 +487,8 @@ async function flowAcme(env, type) {
 async function flowCertbot(env, type) {
   const k = certKeys(type);
   console.log(B(`\n  ── certbot 申请${k.label} ──\n`));
-  const domain  = (await ask(`  域名 [${env[k.domain] ?? ""}]：`)) || env[k.domain] || "";
+  const domain  = (await ask(`  域名 [${env[k.domain] ?? k.defaultDomain}]：`))
+    || env[k.domain] || k.defaultDomain;
   const email   = (await ask(`  邮箱 [${env[k.email] ?? ""}]：`)) || env[k.email] || "";
   const certDir = (await ask(`  证书保存目录 [${k.defaultDir}]：`)) || k.defaultDir;
   if (!domain || !email) { console.log(R("  域名和邮箱不能为空")); return; }
@@ -494,11 +509,12 @@ async function flowCertbot(env, type) {
 async function flowManual(env, type) {
   const k = certKeys(type);
   console.log(B(`\n  ── 手动配置${k.label}路径 ──\n`));
-  const defCert = env[k.certFile] ?? (type === "banner" ? "/root/ygkkkca/cert.crt" : "");
-  const defKey  = env[k.keyFile]  ?? (type === "banner" ? "/root/ygkkkca/private.key" : "");
-  const certFile = (await ask(`  公钥路径 (crt/pem) [${defCert}]：`)) || defCert;
-  const keyFile  = (await ask(`  私钥路径 (key)     [${defKey}]：`))  || defKey;
-  const domainIn = (await ask(`  对应域名 [${env[k.domain] ?? ""}]：`)) || env[k.domain] || "";
+  const defCert   = env[k.certFile]  ?? k.defaultCert;
+  const defKey    = env[k.keyFile]   ?? k.defaultKey;
+  const defDomain = env[k.domain]    ?? k.defaultDomain;
+  const certFile  = (await ask(`  公钥路径 (crt/pem) [${defCert}]：`))   || defCert;
+  const keyFile   = (await ask(`  私钥路径 (key)     [${defKey}]：`))    || defKey;
+  const domainIn  = (await ask(`  对应域名           [${defDomain}]：`)) || defDomain;
 
   if (!existsSync(certFile)) console.log(Y(`  ⚠  证书文件不存在：${certFile}`));
   if (!existsSync(keyFile))  console.log(Y(`  ⚠  密钥文件不存在：${keyFile}`));
