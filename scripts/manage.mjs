@@ -472,6 +472,7 @@ async function menuDaemon() {
   console.log(`  ${cyan("11")}  重载 Caddy（不中断连接）`);
   console.log(`  ${cyan("12")}  查看 Caddy 日志（最近 50 行）`);
   console.log(`  ${cyan("13")}  查看 Caddy 运行状态详情`);
+  console.log(`  ${cyan("17")}  修复证书文件权限（permission denied 时使用）`);
   console.log();
   console.log(`  ${bold(cyan("── 其他 ──"))}`);
   console.log(`  ${cyan("14")}  查看所有 PM2 进程`);
@@ -531,6 +532,16 @@ async function menuDaemon() {
     case "13":
       await sh("systemctl status caddy --no-pager");
       break;
+    case "17": {
+      // Fix cert file permissions so caddy user can read them
+      const env = loadEnv();
+      const certFile = env.SSL_CERT_FILE ?? "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem";
+      const keyFile  = env.SSL_KEY_FILE  ?? "/etc/letsencrypt/live/om.sospaic.top/privkey.pem";
+      const certDir  = certFile.substring(0, certFile.lastIndexOf("/"));
+      await sh(`chmod 755 "${certDir}" 2>/dev/null; chmod 644 "${certFile}" 2>/dev/null; chmod 644 "${keyFile}" 2>/dev/null; echo "✓ 证书权限已修复：644"`);
+      await sh("systemctl restart caddy && echo '✓ Caddy 已重启' || echo '❌ Caddy 重启失败，查看选项13'");
+      break;
+    }
     // ── Other ──
     case "14":
       await run("pm2", ["list"]);

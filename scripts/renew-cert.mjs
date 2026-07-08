@@ -163,8 +163,8 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
 
   // Install cert to target path
   const reloadCmd = method === "standalone"
-    ? "systemctl start caddy 2>/dev/null || true"
-    : "systemctl reload caddy 2>/dev/null || true";
+    ? `chmod 644 ${certDir}/private.key ${certDir}/privkey.pem 2>/dev/null; systemctl start caddy 2>/dev/null || true`
+    : `chmod 644 ${certDir}/private.key ${certDir}/privkey.pem 2>/dev/null; systemctl reload caddy 2>/dev/null || true`;
 
   // Use --ecc flag since acme.sh defaults to ECC (P-256) which stores in domain_ecc/
   const installArgs = [
