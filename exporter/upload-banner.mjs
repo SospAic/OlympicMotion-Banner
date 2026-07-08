@@ -104,14 +104,25 @@ async function uploadViaSession(sessionFile) {
   console.log(`  Cookie 数量：${sessionData.cookies?.length ?? 0}`);
 
   // vps-oauth sessions use refresh_token to get access_token
-  // then use Playwright to establish real browser session for YouTube Studio
+  // If cookies are empty, skip browser session and fall through to OAuth API mode directly
   if (sessionData.loginMethod === "vps-oauth") {
-    console.log("  检测到 VPS OAuth Session，建立浏览器 session 上传");
+    const cookies = sessionData.cookies ?? [];
     const refreshToken = process.env.GOOGLE_REFRESH_TOKEN || sessionData.refreshToken;
+
     if (!refreshToken || refreshToken.includes("你的")) {
       console.error("❌ 未找到有效 refresh_token，请重新运行：node scripts/vps-login.mjs");
       process.exit(1);
     }
+
+    if (cookies.length === 0) {
+      // No browser cookies — use OAuth API directly (mode B)
+      console.log("  Cookie 数量为 0，自动降级到 OAuth API 模式（模式 B）");
+      process.env.GOOGLE_REFRESH_TOKEN = refreshToken;
+      await uploadViaOAuth();
+      return;
+    }
+
+    console.log("  检测到 VPS OAuth Session，建立浏览器 session 上传");
 
     // Get fresh access_token
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -127,7 +138,10 @@ async function uploadViaSession(sessionFile) {
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
       console.error("❌ access_token 获取失败：", JSON.stringify(tokenData));
-      process.exit(1);
+      console.log("  自动降级到 OAuth API 模式（模式 B）");
+      process.env.GOOGLE_REFRESH_TOKEN = refreshToken;
+      await uploadViaOAuth();
+      return;
     }
     const accessToken = tokenData.access_token;
     console.log("  ✓ access_token 获取成功");
@@ -163,9 +177,11 @@ async function uploadViaSession(sessionFile) {
     if (url.includes("accounts.google.com")) {
       await page.screenshot({ path: BANNER_FILE.replace(".png", "-debug-login.png") });
       await browser.close();
-      console.error("❌ 浏览器 session 建立失败，被重定向到登录页");
-      console.error("   调试截图：dist/banner-debug-login.png");
-      process.exit(1);
+      console.warn("⚠  浏览器 session 建立失败，自动降级到 OAuth API 模式（模式 B）");
+      console.warn("   调试截图：dist/banner-debug-login.png");
+      process.env.GOOGLE_REFRESH_TOKEN = refreshToken;
+      await uploadViaOAuth();
+      return;
     }
 
     await _performUpload(page, browser);
