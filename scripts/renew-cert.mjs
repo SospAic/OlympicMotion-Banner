@@ -219,55 +219,73 @@ function setupCron(method, certDir, domain) {
 // ── Renew only mode (called by cron) ──────────────────────────────────────
 async function renewOnly() {
   const env = loadEnv();
-  const certFile = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
-  const domain   = env.DOMAIN ?? "";
+  const ts  = () => `[${new Date().toISOString()}]`;
 
-  console.log(`[${new Date().toISOString()}] 检查证书续期...`);
-  const info = checkCertExpiry(certFile);
-  if (!info) {
-    console.log("⚠  无法读取证书，跳过");
-    return;
-  }
-  console.log(`证书到期：${info.expiry.toLocaleDateString()} （剩余 ${info.daysLeft} 天）`);
-
-  if (info.daysLeft > 30) {
-    console.log("✓ 证书有效，无需续期");
-    return;
-  }
-
-  console.log("⏳ 证书即将到期，开始续期...");
-  const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
-  if (existsSync(acme) && domain) {
-    const code = await run(acme, ["--renew", "-d", domain, "--force"]);
-    if (code === 0) {
-      tryExec("systemctl reload caddy 2>/dev/null || true");
-      console.log(`[${new Date().toISOString()}] ✓ 证书续期成功，Caddy 已重载`);
-    } else {
-      console.error(`[${new Date().toISOString()}] ❌ 续期失败`);
+  // ── Banner cert ──────────────────────────────────────────────────────────
+  const bannerCert   = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
+  const bannerDomain = env.DOMAIN ?? "";
+  console.log(`${ts()} 检查 Banner 证书续期...`);
+  const bannerInfo = checkCertExpiry(bannerCert);
+  if (bannerInfo) {
+    console.log(`  Banner 证书到期：${bannerInfo.expiry.toLocaleDateString()} （剩余 ${bannerInfo.daysLeft} 天）`);
+    if (bannerInfo.daysLeft <= 30 && bannerDomain) {
+      const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
+      if (existsSync(acme)) {
+        const code = await run(acme, ["--renew", "-d", bannerDomain]);
+        if (code === 0) {
+          tryExec("systemctl reload caddy 2>/dev/null || true");
+          console.log(`${ts()} ✓ Banner 证书续期成功，Caddy 已重载`);
+        } else console.error(`${ts()} ❌ Banner 证书续期失败`);
+      }
+    } else if (bannerInfo.daysLeft > 30) {
+      console.log("  ✓ Banner 证书有效，无需续期");
     }
   } else {
-    console.log("⚠  未找到 acme.sh，请手动续期");
+    console.log("  ⚠  Banner 证书文件不存在，跳过");
+  }
+
+  // ── Node cert ────────────────────────────────────────────────────────────
+  const nodeCert   = env.NODE_SSL_CERT_FILE ?? "";
+  const nodeDomain = env.NODE_DOMAIN ?? "";
+  if (nodeCert) {
+    console.log(`${ts()} 检查节点证书续期...`);
+    const nodeInfo = checkCertExpiry(nodeCert);
+    if (nodeInfo) {
+      console.log(`  节点证书到期：${nodeInfo.expiry.toLocaleDateString()} （剩余 ${nodeInfo.daysLeft} 天）`);
+      if (nodeInfo.daysLeft <= 30 && nodeDomain) {
+        const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
+        if (existsSync(acme)) {
+          const reloadCmd = env.NODE_RELOAD_CMD ?? "echo '节点服务已通知续期'";
+          const code = await run(acme, ["--renew", "-d", nodeDomain]);
+          if (code === 0) {
+            tryExec(reloadCmd);
+            console.log(`${ts()} ✓ 节点证书续期成功`);
+          } else console.error(`${ts()} ❌ 节点证书续期失败`);
+        }
+      } else if (nodeInfo.daysLeft > 30) {
+        console.log("  ✓ 节点证书有效，无需续期");
+      }
+    } else {
+      console.log("  ⚠  节点证书文件不存在，跳过");
+    }
   }
 }
 
 // ── Main interactive flow ──────────────────────────────────────────────────
 async function main() {
-  // Cron mode
-  if (process.argv.includes("--renew-only")) {
-    await renewOnly();
-    return;
-  }
+  if (process.argv.includes("--renew-only")) { await renewOnly(); return; }
 
-  // Check mode
   if (process.argv.includes("--check")) {
     const env = loadEnv();
-    const cert = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
-    const info = checkCertExpiry(cert);
-    if (!info) { console.log(Y("⚠  证书文件不存在或无法读取：") + cert); return; }
-    const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
-    console.log(`证书路径：${cert}`);
-    console.log(`到期时间：${info.expiry.toLocaleDateString("zh-CN")}`);
-    console.log(color(`剩余天数：${info.daysLeft} 天`));
+    for (const [label, certKey] of [["Banner", "SSL_CERT_FILE"], ["节点", "NODE_SSL_CERT_FILE"]]) {
+      const cert = env[certKey];
+      if (!cert) continue;
+      const info = checkCertExpiry(cert);
+      if (!info) { console.log(Y(`⚠  ${label} 证书不存在：${cert}`)); continue; }
+      const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
+      console.log(`${label} 证书：${cert}`);
+      console.log(`  到期：${info.expiry.toLocaleDateString("zh-CN")}  ${color(`剩余 ${info.daysLeft} 天`)}`);
+    }
     return;
   }
 
@@ -277,40 +295,46 @@ async function main() {
 
   const env = loadEnv();
 
-  // ── Show current cert status ─────────────────────────────────────────────
-  const currentCert = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
-  const certInfo    = checkCertExpiry(currentCert);
-  if (certInfo) {
-    const color = certInfo.daysLeft > 30 ? G : certInfo.daysLeft > 7 ? Y : R;
-    console.log(`  当前证书：${D(currentCert)}`);
-    console.log(`  到期时间：${color(`${certInfo.expiry.toLocaleDateString("zh-CN")} (剩余 ${certInfo.daysLeft} 天)`)}\n`);
-  } else {
-    console.log(`  当前证书：${Y("未找到")} ${D(currentCert)}\n`);
+  // Show status for both certs
+  for (const [label, certKey] of [["Banner", "SSL_CERT_FILE"], ["节点", "NODE_SSL_CERT_FILE"]]) {
+    const cert = env[certKey] ?? (certKey === "SSL_CERT_FILE" ? "/root/ygkkkca/cert.crt" : "");
+    if (!cert) { console.log(`  ${label} 证书：${D("未配置")}`); continue; }
+    const info = checkCertExpiry(cert);
+    if (info) {
+      const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
+      console.log(`  ${label} 证书：${color(`${info.expiry.toLocaleDateString("zh-CN")} (剩余 ${info.daysLeft} 天)`)}`);
+    } else {
+      console.log(`  ${label} 证书：${Y("文件不存在")} ${D(cert)}`);
+    }
   }
+  console.log();
 
-  console.log(`  ${C("1")}  申请新证书（acme.sh + Let's Encrypt）${G("[推荐]")}`);
-  console.log(`  ${C("2")}  申请新证书（certbot）`);
-  console.log(`  ${C("3")}  手动填写现有证书路径（证书已存在）`);
-  console.log(`  ${C("4")}  立即检查证书到期状态`);
-  console.log(`  ${C("5")}  立即触发续期`);
-  console.log(`  ${C("6")}  配置自动续期 cron`);
+  console.log(`  ${B(cyan("── Banner 证书（Caddy HTTPS）──"))}`);
+  console.log(`  ${C("1")}  Banner 证书 — acme.sh 申请 ${G("[推荐]")}`);
+  console.log(`  ${C("2")}  Banner 证书 — certbot 申请`);
+  console.log(`  ${C("3")}  Banner 证书 — 手动填写路径（已有文件）`);
+  console.log(`  ${C("4")}  Banner 证书 — 检查到期 / 立即续期`);
+  console.log();
+  console.log(`  ${B(cyan("── 节点证书（代理/其他服务）──"))}`);
+  console.log(`  ${C("5")}  节点证书 — acme.sh 申请`);
+  console.log(`  ${C("6")}  节点证书 — certbot 申请`);
+  console.log(`  ${C("7")}  节点证书 — 手动填写路径（已有文件）`);
+  console.log(`  ${C("8")}  节点证书 — 检查到期 / 立即续期`);
+  console.log();
+  console.log(`  ${C("9")}  配置自动续期 cron（两个证书统一续期）`);
   console.log(`  ${C("0")}  返回\n`);
 
   const choice = (await ask("  请选择：")).trim();
-
   switch (choice) {
-    case "1": await flowAcme(env);    break;
-    case "2": await flowCertbot(env); break;
-    case "3": await flowManual(env);  break;
-    case "4": {
-      const info = checkCertExpiry(currentCert);
-      if (!info) { console.log(R("\n  ❌ 无法读取证书")); break; }
-      const c = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
-      console.log(`\n  到期：${info.expiry.toLocaleDateString("zh-CN")}  ${c(`剩余 ${info.daysLeft} 天`)}`);
-      break;
-    }
-    case "5": await renewOnly(); break;
-    case "6": {
+    case "1": await flowAcme(env, "banner");    break;
+    case "2": await flowCertbot(env, "banner"); break;
+    case "3": await flowManual(env, "banner");  break;
+    case "4": await flowCheck(env, "banner");   break;
+    case "5": await flowAcme(env, "node");      break;
+    case "6": await flowCertbot(env, "node");   break;
+    case "7": await flowManual(env, "node");    break;
+    case "8": await flowCheck(env, "node");     break;
+    case "9": {
       const m = env.CERT_METHOD ?? "acme";
       setupCron(m, "/root/ygkkkca", env.DOMAIN ?? "");
       break;
@@ -320,18 +344,76 @@ async function main() {
   }
 }
 
-// ── Flow: acme.sh ─────────────────────────────────────────────────────────
-async function flowAcme(env) {
-  console.log(B("\n  ── acme.sh 申请证书 ──\n"));
+// ── Flow helpers: env keys by cert type ───────────────────────────────────
+function certKeys(type) {
+  if (type === "node") return {
+    certFile:  "NODE_SSL_CERT_FILE",
+    keyFile:   "NODE_SSL_KEY_FILE",
+    domain:    "NODE_DOMAIN",
+    method:    "NODE_CERT_METHOD",
+    email:     "ACME_EMAIL",
+    label:     "节点证书",
+    defaultDir:"/root/ygkkkca-node",
+    reloadCmd: "NODE_RELOAD_CMD",
+    defaultReload: "echo '节点证书已续期'",
+  };
+  return {
+    certFile:  "SSL_CERT_FILE",
+    keyFile:   "SSL_KEY_FILE",
+    domain:    "DOMAIN",
+    method:    "CERT_METHOD",
+    email:     "ACME_EMAIL",
+    label:     "Banner证书",
+    defaultDir:"/root/ygkkkca",
+    reloadCmd: null,
+    defaultReload: "systemctl reload caddy 2>/dev/null || true",
+  };
+}
 
-  const domain = (await ask(`  域名 [${env.DOMAIN ?? ""}]：`)) || env.DOMAIN || "";
+// ── Flow: check & renew ────────────────────────────────────────────────────
+async function flowCheck(env, type) {
+  const k    = certKeys(type);
+  const cert = env[k.certFile] ?? (type === "banner" ? "/root/ygkkkca/cert.crt" : "");
+  if (!cert) { console.log(Y(`\n  ⚠  ${k.label}路径未配置`)); return; }
+  const info = checkCertExpiry(cert);
+  if (!info) { console.log(R(`\n  ❌ 无法读取 ${k.label}：${cert}`)); return; }
+  const color = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
+  console.log(`\n  ${k.label} 路径：${D(cert)}`);
+  console.log(`  到期时间：${info.expiry.toLocaleDateString("zh-CN")}`);
+  console.log(`  ${color(`剩余 ${info.daysLeft} 天`)}`);
+
+  if (info.daysLeft <= 30) {
+    const confirm = (await ask("\n  证书即将到期，立即续期？(y/N)：")).toLowerCase();
+    if (confirm === "y") {
+      const domain = env[k.domain] ?? "";
+      const acme   = `${process.env.HOME}/.acme.sh/acme.sh`;
+      if (existsSync(acme) && domain) {
+        const code = await run(acme, ["--renew", "-d", domain, "--force"]);
+        if (code === 0) {
+          tryExec(type === "banner"
+            ? "systemctl reload caddy 2>/dev/null || true"
+            : (env[k.reloadCmd] ?? k.defaultReload));
+          console.log(G("\n  ✓ 续期成功"));
+        } else console.log(R("\n  ❌ 续期失败"));
+      } else {
+        console.log(Y("  ⚠  未找到 acme.sh 或域名未配置，请手动续期"));
+      }
+    }
+  }
+}
+
+// ── Flow: acme.sh ─────────────────────────────────────────────────────────
+async function flowAcme(env, type) {
+  const k = certKeys(type);
+  console.log(B(`\n  ── acme.sh 申请${k.label} ──\n`));
+
+  const domain = (await ask(`  域名 [${env[k.domain] ?? ""}]：`)) || env[k.domain] || "";
   if (!domain) { console.log(R("  域名不能为空")); return; }
 
-  const email = (await ask(`  邮箱（Let's Encrypt 通知用）[${env.ACME_EMAIL ?? ""}]：`))
-    || env.ACME_EMAIL || "";
+  const email = (await ask(`  邮箱 [${env[k.email] ?? ""}]：`)) || env[k.email] || "";
   if (!email) { console.log(R("  邮箱不能为空")); return; }
 
-  const certDir = (await ask(`  证书保存目录 [/root/ygkkkca]：`)) || "/root/ygkkkca";
+  const certDir = (await ask(`  证书保存目录 [${k.defaultDir}]：`)) || k.defaultDir;
 
   console.log(`\n  验证方式：`);
   console.log(`  ${C("1")}  HTTP-01（需要 80 端口在申请期间可用）`);
@@ -342,102 +424,102 @@ async function flowAcme(env) {
   let dnsProvider = "";
   const dnsEnvVars = {};
   if (method === "dns") {
-    console.log(`\n  常用 DNS 提供商：`);
-    console.log(`  dns_cf（Cloudflare）dns_dp（DNSPod）dns_ali（阿里云）dns_gd（GoDaddy）`);
+    console.log(`\n  常用 DNS 提供商：dns_cf（Cloudflare）dns_dp（DNSPod）dns_ali（阿里云）`);
     dnsProvider = (await ask("  DNS 提供商 [dns_cf]：")) || "dns_cf";
-
     if (dnsProvider === "dns_cf") {
-      const cfToken = await ask("  Cloudflare API Token（或留空用 CF_Key+CF_Email）：");
-      if (cfToken) {
-        dnsEnvVars["CF_Token"] = cfToken;
-        saveEnv("CF_TOKEN", cfToken);
-      } else {
+      const cfToken = await ask("  Cloudflare API Token：");
+      if (cfToken) { dnsEnvVars["CF_Token"] = cfToken; saveEnv("CF_TOKEN", cfToken); }
+      else {
         dnsEnvVars["CF_Key"]   = await ask("  CF_Key：");
         dnsEnvVars["CF_Email"] = await ask("  CF_Email：");
-        saveEnv("CF_KEY",   dnsEnvVars["CF_Key"]);
-        saveEnv("CF_EMAIL", dnsEnvVars["CF_Email"]);
+        saveEnv("CF_KEY", dnsEnvVars["CF_Key"]); saveEnv("CF_EMAIL", dnsEnvVars["CF_Email"]);
       }
     } else if (dnsProvider === "dns_dp") {
       dnsEnvVars["DP_Id"]  = await ask("  DNSPod ID：");
       dnsEnvVars["DP_Key"] = await ask("  DNSPod Key：");
-      saveEnv("DP_ID",  dnsEnvVars["DP_Id"]);
-      saveEnv("DP_KEY", dnsEnvVars["DP_Key"]);
+      saveEnv("DP_ID", dnsEnvVars["DP_Id"]); saveEnv("DP_KEY", dnsEnvVars["DP_Key"]);
     } else if (dnsProvider === "dns_ali") {
       dnsEnvVars["Ali_Key"]    = await ask("  阿里云 AccessKey ID：");
       dnsEnvVars["Ali_Secret"] = await ask("  阿里云 AccessKey Secret：");
-      saveEnv("ALI_KEY",    dnsEnvVars["Ali_Key"]);
-      saveEnv("ALI_SECRET", dnsEnvVars["Ali_Secret"]);
+      saveEnv("ALI_KEY", dnsEnvVars["Ali_Key"]); saveEnv("ALI_SECRET", dnsEnvVars["Ali_Secret"]);
     } else {
-      const extraKey = await ask("  环境变量名（如 GD_Key）：");
-      const extraVal = await ask("  值：");
-      if (extraKey) { dnsEnvVars[extraKey] = extraVal; saveEnv(extraKey, extraVal); }
+      const ek = await ask("  环境变量名："); const ev = await ask("  值：");
+      if (ek) { dnsEnvVars[ek] = ev; saveEnv(ek, ev); }
     }
   }
 
-  try {
-    const { certFile, keyFile } = await issueAcme({
-      domain, email, certDir, method, dnsProvider, dnsEnvVars
-    });
-    saveEnv("DOMAIN",        domain);
-    saveEnv("ACME_EMAIL",    email);
-    saveEnv("SSL_CERT_FILE", certFile);
-    saveEnv("SSL_KEY_FILE",  keyFile);
-    saveEnv("CERT_METHOD",   "acme");
-    setupCron("acme", certDir, domain);
-
-    console.log(G("\n  ✅ 证书申请成功！"));
-    console.log(`  证书：${certFile}`);
-    console.log(`  密钥：${keyFile}`);
-    console.log(`\n  ${Y("下一步：")} 重新运行 node scripts/setup-caddy.mjs 更新 Caddy 配置`);
-  } catch (e) {
-    console.log(R(`\n  ❌ ${e.message}`));
+  // For node cert: ask for reload command
+  if (type === "node") {
+    const reloadCmd = (await ask(`  续期后执行命令（重载节点服务，留空跳过）[${env[k.reloadCmd] ?? ""}]：`))
+      || env[k.reloadCmd] || "";
+    if (reloadCmd) saveEnv(k.reloadCmd, reloadCmd);
   }
+
+  try {
+    const { certFile, keyFile } = await issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVars });
+    saveEnv(k.domain,   domain);
+    saveEnv(k.email,    email);
+    saveEnv(k.certFile, certFile);
+    saveEnv(k.keyFile,  keyFile);
+    saveEnv(k.method,   "acme");
+    setupCron("acme", certDir, domain);
+    console.log(G(`\n  ✅ ${k.label}申请成功！`));
+    console.log(`  证书：${certFile}\n  密钥：${keyFile}`);
+    if (type === "banner") console.log(`\n  ${Y("下一步：")} 重新运行 node scripts/setup-caddy.mjs`);
+  } catch (e) { console.log(R(`\n  ❌ ${e.message}`)); }
 }
 
 // ── Flow: certbot ─────────────────────────────────────────────────────────
-async function flowCertbot(env) {
-  console.log(B("\n  ── certbot 申请证书 ──\n"));
-  const domain  = (await ask(`  域名 [${env.DOMAIN ?? ""}]：`)) || env.DOMAIN || "";
-  const email   = (await ask(`  邮箱：`)) || env.ACME_EMAIL || "";
-  const certDir = (await ask(`  证书保存目录 [/root/ygkkkca]：`)) || "/root/ygkkkca";
+async function flowCertbot(env, type) {
+  const k = certKeys(type);
+  console.log(B(`\n  ── certbot 申请${k.label} ──\n`));
+  const domain  = (await ask(`  域名 [${env[k.domain] ?? ""}]：`)) || env[k.domain] || "";
+  const email   = (await ask(`  邮箱 [${env[k.email] ?? ""}]：`)) || env[k.email] || "";
+  const certDir = (await ask(`  证书保存目录 [${k.defaultDir}]：`)) || k.defaultDir;
   if (!domain || !email) { console.log(R("  域名和邮箱不能为空")); return; }
   try {
     const { certFile, keyFile } = await issueCertbot({ domain, email, certDir });
-    saveEnv("DOMAIN",        domain);
-    saveEnv("ACME_EMAIL",    email);
-    saveEnv("SSL_CERT_FILE", certFile);
-    saveEnv("SSL_KEY_FILE",  keyFile);
-    saveEnv("CERT_METHOD",   "certbot");
+    saveEnv(k.domain,   domain);
+    saveEnv(k.email,    email);
+    saveEnv(k.certFile, certFile);
+    saveEnv(k.keyFile,  keyFile);
+    saveEnv(k.method,   "certbot");
     setupCron("certbot", certDir, domain);
-    console.log(G("\n  ✅ 证书申请成功！"));
-    console.log(`  ${Y("下一步：")} 重新运行 node scripts/setup-caddy.mjs`);
-  } catch (e) {
-    console.log(R(`\n  ❌ ${e.message}`));
-  }
+    console.log(G(`\n  ✅ ${k.label}申请成功！`));
+    if (type === "banner") console.log(`  ${Y("下一步：")} 重新运行 node scripts/setup-caddy.mjs`);
+  } catch (e) { console.log(R(`\n  ❌ ${e.message}`)); }
 }
 
 // ── Flow: manual path ─────────────────────────────────────────────────────
-async function flowManual(env) {
-  console.log(B("\n  ── 手动配置证书路径 ──\n"));
-  const certFile = (await ask(`  公钥路径 (crt/pem) [${env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt"}]：`))
-    || env.SSL_CERT_FILE || "/root/ygkkkca/cert.crt";
-  const keyFile  = (await ask(`  私钥路径 (key)     [${env.SSL_KEY_FILE ?? "/root/ygkkkca/private.key"}]：`))
-    || env.SSL_KEY_FILE || "/root/ygkkkca/private.key";
+async function flowManual(env, type) {
+  const k = certKeys(type);
+  console.log(B(`\n  ── 手动配置${k.label}路径 ──\n`));
+  const defCert = env[k.certFile] ?? (type === "banner" ? "/root/ygkkkca/cert.crt" : "");
+  const defKey  = env[k.keyFile]  ?? (type === "banner" ? "/root/ygkkkca/private.key" : "");
+  const certFile = (await ask(`  公钥路径 (crt/pem) [${defCert}]：`)) || defCert;
+  const keyFile  = (await ask(`  私钥路径 (key)     [${defKey}]：`))  || defKey;
+  const domainIn = (await ask(`  对应域名 [${env[k.domain] ?? ""}]：`)) || env[k.domain] || "";
 
   if (!existsSync(certFile)) console.log(Y(`  ⚠  证书文件不存在：${certFile}`));
   if (!existsSync(keyFile))  console.log(Y(`  ⚠  密钥文件不存在：${keyFile}`));
 
-  saveEnv("SSL_CERT_FILE", certFile);
-  saveEnv("SSL_KEY_FILE",  keyFile);
+  saveEnv(k.certFile, certFile);
+  saveEnv(k.keyFile,  keyFile);
+  if (domainIn) saveEnv(k.domain, domainIn);
+
+  if (type === "node") {
+    const reloadCmd = (await ask(`  续期后执行命令（重载节点服务，留空跳过）[${env[k.reloadCmd] ?? ""}]：`))
+      || env[k.reloadCmd] || "";
+    if (reloadCmd) saveEnv(k.reloadCmd, reloadCmd);
+  }
 
   const info = checkCertExpiry(certFile);
   if (info) {
     const c = info.daysLeft > 30 ? G : info.daysLeft > 7 ? Y : R;
     console.log(c(`\n  证书到期：${info.expiry.toLocaleDateString("zh-CN")}（剩余 ${info.daysLeft} 天）`));
   }
-
-  console.log(G("\n  ✅ 证书路径已保存到 .env"));
-  console.log(`  ${Y("下一步：")} 重新运行 node scripts/setup-caddy.mjs`);
+  console.log(G(`\n  ✅ ${k.label}路径已保存到 .env`));
+  if (type === "banner") console.log(`  ${Y("下一步：")} 重新运行 node scripts/setup-caddy.mjs`);
 }
 
 main().catch(e => { console.error(R(`❌ ${e.message}`)); process.exit(1); });
