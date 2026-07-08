@@ -292,29 +292,41 @@ async function renewOnly() {
   }
 
   // ── Node cert ────────────────────────────────────────────────────────────
-  const nodeCert   = env.NODE_SSL_CERT_FILE ?? "";
-  const nodeDomain = env.NODE_DOMAIN ?? "";
-  if (nodeCert) {
-    console.log(`${ts()} 检查节点证书续期...`);
-    const nodeInfo = checkCertExpiry(nodeCert);
-    if (nodeInfo) {
-      console.log(`  节点证书到期：${nodeInfo.expiry.toLocaleDateString()} （剩余 ${nodeInfo.daysLeft} 天）`);
-      if (nodeInfo.daysLeft <= 30 && nodeDomain) {
-        const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
-        if (existsSync(acme)) {
-          const reloadCmd = env.NODE_RELOAD_CMD ?? "echo '节点服务已通知续期'";
-          const code = await run(acme, ["--renew", "-d", nodeDomain, "--ecc"]);
-          if (code === 0) {
-            tryExec(reloadCmd);
-            console.log(`${ts()} ✓ 节点证书续期成功`);
-          } else console.error(`${ts()} ❌ 节点证书续期失败`);
-        }
-      } else if (nodeInfo.daysLeft > 30) {
-        console.log("  ✓ 节点证书有效，无需续期");
-      }
-    } else {
-      console.log("  ⚠  节点证书文件不存在，跳过");
+  // Node cert is managed by an external script that writes to NODE_SSL_CERT_FILE.
+  // We only monitor the file's mtime — if it changed since last check, run NODE_RELOAD_CMD.
+  const nodeCert      = env.NODE_SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
+  const nodeKey       = env.NODE_SSL_KEY_FILE  ?? "/root/ygkkkca/private.key";
+  const nodeReload    = env.NODE_RELOAD_CMD    ?? "";
+  const lastHandled   = Number(env.NODE_CERT_LAST_HANDLED ?? "0");
+
+  if (existsSync(nodeCert)) {
+    console.log(`${ts()} 检查节点证书文件变更...`);
+    const info = checkCertExpiry(nodeCert);
+    if (info) {
+      const days = info.daysLeft >= 0 ? `剩余 ${info.daysLeft} 天` : `已过期 ${Math.abs(info.daysLeft)} 天`;
+      console.log(`  节点证书：${info.expiry.toLocaleDateString()}（${days}）`);
     }
+
+    // Check if the cert file was modified after our last handled timestamp
+    try {
+      const { statSync } = await import("node:fs");
+      const mtimeMs = statSync(nodeCert).mtimeMs;
+      if (mtimeMs > lastHandled) {
+        console.log(`  检测到节点证书文件已更新（${new Date(mtimeMs).toISOString()}）`);
+        if (nodeReload) {
+          tryExec(nodeReload);
+          console.log(`${ts()} ✓ 节点服务已重载：${nodeReload}`);
+        } else {
+          console.log(`  ℹ  NODE_RELOAD_CMD 未配置，跳过重载`);
+        }
+        // Record handled time
+        saveEnv("NODE_CERT_LAST_HANDLED", String(Date.now()));
+      } else {
+        console.log("  ✓ 节点证书未变更，无需处理");
+      }
+    } catch { /* ignore */ }
+  } else {
+    console.log(`  ⚠  节点证书文件不存在：${nodeCert}`);
   }
 }
 
