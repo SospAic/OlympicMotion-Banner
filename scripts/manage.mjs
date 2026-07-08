@@ -238,7 +238,7 @@ async function mainMenu() {
   console.log(`  ${cyan("1")}  安装 & 初始化`);
   console.log(`  ${cyan("2")}  登录 & Session 管理`);
   console.log(`  ${cyan("3")}  生成 & 上传 Banner`);
-  console.log(`  ${cyan("4")}  守护进程管理`);
+  console.log(`  ${cyan("4")}  服务管理`);
   console.log(`  ${cyan("5")}  配置管理`);
   console.log(`  ${cyan("6")}  查看日志`);
   console.log(`  ${cyan("0")}  退出`);
@@ -425,60 +425,119 @@ async function menuBanner() {
 
 // ── 4. Daemon menu ────────────────────────────────────────────────────────
 async function menuDaemon() {
-  header("守护进程管理 (PM2)");
+  header("服务管理");
 
-  let pm2Status = "未运行";
-  try {
-    const out  = execSync("pm2 jlist 2>/dev/null || echo '[]'", { encoding: "utf8" });
-    const list = JSON.parse(out);
-    const d    = list.find(p => p.name === "banner-daemon");
-    if (d) pm2Status = d.pm2_env?.status === "online" ? green("运行中") : red(d.pm2_env?.status);
-  } catch { /* ignore */ }
+  // ── Collect service status ──────────────────────────────────────────────
+  function svcStatus(name) {
+    try {
+      const s = execSync(`systemctl is-active ${name} 2>/dev/null`, { encoding: "utf8" }).trim();
+      return s === "active" ? green("运行中") : red(s);
+    } catch { return red("未知"); }
+  }
 
-  console.log(`  守护进程状态：${pm2Status}\n`);
+  function pm2AppStatus(appName) {
+    try {
+      const out  = execSync("pm2 jlist 2>/dev/null || echo '[]'", { encoding: "utf8" });
+      const list = JSON.parse(out);
+      const d    = list.find(p => p.name === appName);
+      if (!d) return red("未运行");
+      return d.pm2_env?.status === "online" ? green("运行中") : red(d.pm2_env?.status);
+    } catch { return red("未知"); }
+  }
+
+  const daemonSt = pm2AppStatus("banner-daemon");
+  const caddySt  = svcStatus("caddy");
+
+  console.log(`  ${dim("PM2 Banner守护进程：")} ${daemonSt}`);
+  console.log(`  ${dim("Caddy 反向代理：    ")} ${caddySt}\n`);
+
+  console.log(`  ${bold(cyan("── Banner 守护进程 (PM2) ──"))}`);
   console.log(`  ${cyan("1")}  启动守护进程`);
   console.log(`  ${cyan("2")}  停止守护进程`);
   console.log(`  ${cyan("3")}  重启守护进程`);
-  console.log(`  ${cyan("4")}  查看守护进程日志`);
-  console.log(`  ${cyan("5")}  设置开机自启`);
-  console.log(`  ${cyan("6")}  健康检查`);
-  console.log(`  ${cyan("7")}  查看 cron 定时任务`);
+  console.log(`  ${cyan("4")}  查看守护进程日志（最近 50 行）`);
+  console.log(`  ${cyan("5")}  实时追踪守护进程日志`);
+  console.log(`  ${cyan("6")}  健康检查（Webhook 接口）`);
+  console.log(`  ${cyan("7")}  设置开机自启 (pm2 startup)`);
+  console.log();
+  console.log(`  ${bold(cyan("── Caddy 反向代理 ──"))}`);
+  console.log(`  ${cyan("8")}  启动 Caddy`);
+  console.log(`  ${cyan("9")}  停止 Caddy`);
+  console.log(`  ${cyan("r")}  重启 Caddy`);
+  console.log(`  ${cyan("R")}  重载 Caddy（不中断连接）`);
+  console.log(`  ${cyan("c")}  查看 Caddy 日志（最近 50 行）`);
+  console.log(`  ${cyan("C")}  查看 Caddy 运行状态详情`);
+  console.log();
+  console.log(`  ${bold(cyan("── 其他 ──"))}`);
+  console.log(`  ${cyan("p")}  查看所有 PM2 进程`);
+  console.log(`  ${cyan("s")}  查看系统端口占用（ss -tlnp）`);
+  console.log(`  ${cyan("t")}  查看 cron 定时任务`);
   console.log(`  ${cyan("0")}  返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
+  console.log();
   switch (c) {
+    // ── PM2 ──
     case "1":
-      console.log();
       await run("pm2", ["start", "scripts/watch-daemon.mjs", "--name", "banner-daemon"]);
       await run("pm2", ["save"]);
       break;
     case "2":
-      console.log(); await run("pm2", ["stop",    "banner-daemon"]);
+      await run("pm2", ["stop", "banner-daemon"]);
       break;
     case "3":
-      console.log(); await run("pm2", ["restart", "banner-daemon"]);
+      await run("pm2", ["restart", "banner-daemon"]);
       break;
     case "4":
-      console.log(); await run("pm2", ["logs", "banner-daemon", "--lines", "50"]);
+      await run("pm2", ["logs", "banner-daemon", "--lines", "50", "--nostream"]);
       break;
     case "5":
-      console.log();
-      await run("pm2", ["save"]);
-      await run("pm2", ["startup"]);
+      console.log(dim("  按 Ctrl+C 退出追踪\n"));
+      await run("pm2", ["logs", "banner-daemon"]);
       break;
     case "6": {
       const env  = loadEnv();
       const port = env.WEBHOOK_PORT ?? "47832";
-      console.log();
-      await run("curl", ["-s", `http://localhost:${port}/health`]);
-      console.log();
+      await run("curl", ["-s", "-w", "\n", `http://localhost:${port}/health`]);
       break;
     }
     case "7":
-      console.log();
+      await run("pm2", ["save"]);
+      await run("pm2", ["startup"]);
+      break;
+    // ── Caddy ──
+    case "8":
+      await run("systemctl", ["start", "caddy"]);
+      break;
+    case "9": {
+      const confirm = (await ask("  确认停止 Caddy？HTTPS 服务将中断 (y/N)：")).toLowerCase();
+      if (confirm === "y") await run("systemctl", ["stop", "caddy"]);
+      break;
+    }
+    case "r":
+      await run("systemctl", ["restart", "caddy"]);
+      break;
+    case "R":
+      await run("systemctl", ["reload", "caddy"]);
+      break;
+    case "c":
+      await run("journalctl", ["-u", "caddy", "-n", "50", "--no-pager"]);
+      break;
+    case "C":
+      await run("systemctl", ["status", "caddy", "--no-pager"]);
+      break;
+    // ── Other ──
+    case "p":
+      await run("pm2", ["list"]);
+      break;
+    case "s":
+      await run("bash", ["-c", "ss -tlnp | head -40"]);
+      break;
+    case "t":
       await run("crontab", ["-l"]);
       break;
     case "0": break;
+    default: console.log(yellow("  无效选项"));
   }
   await pause(); await mainMenu();
 }
