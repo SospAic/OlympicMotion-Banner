@@ -141,7 +141,7 @@ function getStatus() {
   // Check Caddy running
   let caddyRunning = false;
   try {
-    const out = execSync("systemctl is-active caddy 2>/dev/null", { encoding: "utf8" }).trim();
+    const out = execSync("systemctl is-active caddy 2>/dev/null; true", { encoding: "utf8" }).trim();
     caddyRunning = out === "active";
   } catch { /* ignore */ }
 
@@ -430,8 +430,8 @@ async function menuDaemon() {
   // ── Collect service status ──────────────────────────────────────────────
   function svcStatus(name) {
     try {
-      const s = execSync(`systemctl is-active ${name} 2>/dev/null || echo inactive`, { encoding: "utf8" }).trim();
-      return s === "active" ? green("运行中") : red(s);
+      const s = execSync(`systemctl is-active ${name} 2>/dev/null; true`, { encoding: "utf8" }).trim();
+      return s === "active" ? green("运行中") : red(s || "inactive");
     } catch { return red("未知"); }
   }
 
@@ -680,4 +680,7 @@ try {
   }
 } catch { /* ignore */ }
 
-await mainMenu();
+// Wrap in async main to avoid top-level await warning on older Node versions
+(async () => {
+  await mainMenu();
+})().catch(e => { console.error(e.message); process.exit(1); });
