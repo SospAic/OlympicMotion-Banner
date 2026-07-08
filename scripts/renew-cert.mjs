@@ -113,6 +113,13 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
 
   mkdirSync(certDir, { recursive: true });
 
+  // Pre-load DNS API keys from .env so acme.sh can use them
+  const envFile = loadEnv();
+  if (envFile.NAMESILO_KEY) process.env.Namesilo_Key = envFile.NAMESILO_KEY;
+  if (envFile.CF_TOKEN)     process.env.CF_Token      = envFile.CF_TOKEN;
+  if (envFile.CF_KEY)       process.env.CF_Key        = envFile.CF_KEY;
+  if (envFile.CF_EMAIL)     process.env.CF_Email      = envFile.CF_EMAIL;
+
   let issueArgs;
   if (method === "dns") {
     issueArgs = [
@@ -247,6 +254,17 @@ function setupCron(method, certDir, domain) {
 async function renewOnly() {
   const env = loadEnv();
   const ts  = () => `[${new Date().toISOString()}]`;
+
+  // Inject DNS API keys from .env into process environment
+  // so acme.sh can use them for DNS-01 renewal without manual export
+  if (env.NAMESILO_KEY) process.env.Namesilo_Key = env.NAMESILO_KEY;
+  if (env.CF_TOKEN)     process.env.CF_Token      = env.CF_TOKEN;
+  if (env.CF_KEY)       process.env.CF_Key        = env.CF_KEY;
+  if (env.CF_EMAIL)     process.env.CF_Email      = env.CF_EMAIL;
+  if (env.DP_ID)        process.env.DP_Id         = env.DP_ID;
+  if (env.DP_KEY)       process.env.DP_Key        = env.DP_KEY;
+  if (env.ALI_KEY)      process.env.Ali_Key       = env.ALI_KEY;
+  if (env.ALI_SECRET)   process.env.Ali_Secret    = env.ALI_SECRET;
 
   // ── Banner cert ──────────────────────────────────────────────────────────
   const bannerCert   = env.SSL_CERT_FILE ?? "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem";
@@ -482,11 +500,14 @@ async function flowAcme(env, type) {
         saveEnv("CF_KEY", dnsEnvVars["CF_Key"]); saveEnv("CF_EMAIL", dnsEnvVars["CF_Email"]);
       }
     } else if (dnsProvider === "dns_namesilo") {
-      const key = (await ask(`  NameSilo API Key [${env.NAMESILO_KEY ?? ""}]：`)) || env.NAMESILO_KEY || "";
+      // Load from env first, only ask if not set
+      const existingKey = env.NAMESILO_KEY ?? "";
+      const key = existingKey
+        ? (await ask(`  NameSilo API Key [已配置，回车保留]：`)) || existingKey
+        : (await ask(`  NameSilo API Key：`));
       if (!key) { console.log(R("  API Key 不能为空")); return; }
       dnsEnvVars["Namesilo_Key"] = key;
       saveEnv("NAMESILO_KEY", key);
-      // NameSilo DNS propagation is slow — need extra sleep
       dnsEnvVars["_DNS_SLEEP"] = "300";
       console.log(Y("  ℹ  NameSilo DNS 传播较慢，将等待 5 分钟后验证"));
     } else if (dnsProvider === "dns_dp") {
