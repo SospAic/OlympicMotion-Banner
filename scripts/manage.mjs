@@ -114,13 +114,35 @@ function getStatus() {
 
   // Check SSL cert expiry
   let certDaysLeft = null;
+  let certExists   = false;
   try {
     const certFile = env.SSL_CERT_FILE ?? "/etc/letsencrypt/live/om.sospaic.top/fullchain.pem";
-    if (existsSync(certFile)) {
+    certExists = existsSync(certFile);
+    if (certExists) {
       const out = execSync(`openssl x509 -enddate -noout -in "${certFile}" 2>/dev/null`, { encoding: "utf8" }).trim();
       const match = out.match(/notAfter=(.+)/);
       if (match) certDaysLeft = Math.floor((new Date(match[1]) - Date.now()) / 86400000);
     }
+  } catch { /* ignore */ }
+
+  // Check node cert expiry
+  let nodeCertDaysLeft = null;
+  let nodeCertExists   = false;
+  try {
+    const nodeFile = env.NODE_SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
+    nodeCertExists = existsSync(nodeFile);
+    if (nodeCertExists) {
+      const out = execSync(`openssl x509 -enddate -noout -in "${nodeFile}" 2>/dev/null`, { encoding: "utf8" }).trim();
+      const match = out.match(/notAfter=(.+)/);
+      if (match) nodeCertDaysLeft = Math.floor((new Date(match[1]) - Date.now()) / 86400000);
+    }
+  } catch { /* ignore */ }
+
+  // Check Caddy running
+  let caddyRunning = false;
+  try {
+    const out = execSync("systemctl is-active caddy 2>/dev/null", { encoding: "utf8" }).trim();
+    caddyRunning = out === "active";
   } catch { /* ignore */ }
 
   return {
@@ -129,11 +151,18 @@ function getStatus() {
     hasChannelId:!!(env.YOUTUBE_CHANNEL_ID),
     hasSess,
     sessAge,
-    hasEncKey:   !!(env.SESSION_ENCRYPTION_KEY),
+    hasEncKey:      !!(env.SESSION_ENCRYPTION_KEY),
+    hasRefreshToken:!!(env.GOOGLE_REFRESH_TOKEN),
+    hasDomain:      !!(env.DOMAIN),
+    domain:         env.DOMAIN ?? "",
     hasBanner,
     bannerAge,
     pm2Running,
+    caddyRunning,
+    certExists,
     certDaysLeft,
+    nodeCertExists,
+    nodeCertDaysLeft,
     subs:        env.YOUTUBE_API_KEY ? "已配置" : "未配置",
     currentSubs: (() => {
       try {
@@ -169,16 +198,37 @@ async function mainMenu() {
   header();
 
   console.log("  " + bold("系统状态："));
-  console.log(statusLine(st.hasEnv,     ".env 配置文件"));
-  console.log(statusLine(st.hasApiKey,  "YouTube API Key"));
-  console.log(statusLine(st.hasSess,    "登录 Session",    st.hasSess ? `创建于 ${st.sessAge}` : ""));
-  console.log(statusLine(st.hasEncKey,  "Session 加密"));
-  console.log(statusLine(st.hasBanner,  "Banner 文件",     st.hasBanner ? `生成于 ${st.bannerAge}` : ""));
-  console.log(statusLine(st.pm2Running, "守护进程 (pm2)",  st.pm2Running ? "运行中" : "未运行"));
-  if (st.certDaysLeft !== null) {
-    const certOk = st.certDaysLeft > 14;
-    const certDetail = st.certDaysLeft > 0 ? `剩余 ${st.certDaysLeft} 天` : "已过期！";
-    console.log(statusLine(certOk, "SSL 证书",           certDetail));
+  console.log(statusLine(st.hasEnv,          ".env 配置文件"));
+  console.log(statusLine(st.hasApiKey,        "YouTube API Key"));
+  console.log(statusLine(st.hasChannelId,     "YouTube 频道 ID"));
+  console.log(statusLine(st.hasSess || st.hasRefreshToken, "上传凭据",
+    st.hasSess ? `Session (${st.sessAge})` : st.hasRefreshToken ? "OAuth Token" : "未配置"));
+  console.log(statusLine(st.hasEncKey,        "Session 加密"));
+  console.log(statusLine(st.hasBanner,        "Banner 文件",    st.hasBanner ? `生成于 ${st.bannerAge}` : ""));
+  console.log(statusLine(st.pm2Running,       "守护进程 (pm2)", st.pm2Running ? "运行中" : "未运行"));
+  console.log(statusLine(st.caddyRunning,     "Caddy 服务",     st.caddyRunning ? "运行中" : "未运行"));
+  console.log(statusLine(st.hasDomain,        "Banner 域名",    st.domain));
+
+  // Banner cert
+  {
+    const ok     = st.certExists && st.certDaysLeft !== null && st.certDaysLeft > 14;
+    let detail;
+    if (!st.certExists)                   detail = "证书文件不存在";
+    else if (st.certDaysLeft === null)    detail = "无法读取";
+    else if (st.certDaysLeft < 0)         detail = `已过期 ${Math.abs(st.certDaysLeft)} 天`;
+    else                                  detail = `剩余 ${st.certDaysLeft} 天`;
+    console.log(statusLine(ok, "Banner SSL 证书", detail));
+  }
+
+  // Node cert
+  {
+    const ok     = st.nodeCertExists && st.nodeCertDaysLeft !== null && st.nodeCertDaysLeft > 14;
+    let detail;
+    if (!st.nodeCertExists)                   detail = "证书文件不存在";
+    else if (st.nodeCertDaysLeft === null)    detail = "无法读取";
+    else if (st.nodeCertDaysLeft < 0)         detail = `已过期 ${Math.abs(st.nodeCertDaysLeft)} 天`;
+    else                                      detail = `剩余 ${st.nodeCertDaysLeft} 天`;
+    console.log(statusLine(ok, "节点 SSL 证书", detail));
   }
   if (st.currentSubs) {
     console.log(`\n  ${dim("当前订阅数：")} ${yellow(st.currentSubs.toLocaleString())}`);
