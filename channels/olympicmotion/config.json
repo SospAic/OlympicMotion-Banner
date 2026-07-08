@@ -1,0 +1,127 @@
+{
+  "brand": {
+    "channelName": "OlympicMotion",
+    "slogan": "Every Play Has A Story",
+    "sloganAccent": "Story",
+    "logo": "/assets/logo.svg",
+    "brandLine1": "Olympic",
+    "brandLine2": "Motion"
+  },
+  "mission": {
+    "label": "Mission",
+    "title": "Road To <span>1M</span> Champions",
+    "goal": 1000000,
+    "cta": "Subscribe & Be Part Of The Journey",
+    "subscribersLabel": "Subscribers",
+    "nextGoalLabel": "Next Goal",
+    "targetLabel": "Target"
+  },
+  "data": {
+    "subs": 99999999
+  },
+  "v2Layout": {
+    "_comment": "bg.png 原始尺寸 1642x923 (YouTube Full Banner)，所有坐标基于此尺寸",
+    "_tip": "修改后运行: node exporter/render-banner-v2.mjs 查看效果",
+    "progressBar": {
+      "_comment": "进度条轨道，金色填充表示当前订阅数完成百分比",
+      "x": 648,
+      "y": 508,
+      "w": 220,
+      "h": 31,
+      "cornerRadius": 15,
+      "fillCornerRadius": 15,
+      "fillStyle": {
+        "type": "gradient",
+        "colors": ["#fffae8", "#ffd95a", "#ffc233", "#f5a615", "#a85f00"],
+        "shimmerOpacity": 0.18,
+        "glowColor": "rgba(255,200,50,0.55)",
+        "glowBlur": 8
+      },
+      "subsNumber": {
+        "_comment": "订阅数显示在进度条正中央，offsetX/Y 是相对进度条宽高的比例 0~1",
+        "offsetX": 0.5,
+        "offsetY": 0.85,
+        "fontSize": 33,
+        "color": "#ffffff",
+        "fontFamily": "Arial Black,Impact,sans-serif",
+        "fontWeight": "900",
+        "letterSpacing": -1,
+        "shadowBlur": 4
+      }
+    },
+    "toGoBox": {
+      "_comment": "当前订阅数距离最近档位还差多少，显示在进度条右侧",
+      "x": 946,
+      "y": 509,
+      "w": 90,
+      "h": 37,
+      "numberOffsetX": 0.5,
+      "numberOffsetY": 0.78,
+      "fontSize": 35,
+      "autoShrink": true,
+      "maxFontSize": 35,
+      "minFontSize": 16,
+      "useCompactFormat": true,
+      "compactThreshold": 99999,
+      "color": "#ffc94a",
+      "fontFamily": "Arial Black,Impact,sans-serif",
+      "fontWeight": "900"
+    },
+    "badgeRow": {
+      "_comment": "成就徽章行，count=显示徽章总数（自动截取 achievements 前 count 个）",
+      "count": 7,
+      "showLabel": false,
+      "showCaption": false,
+      "x0": 656,
+      "y": 437,
+      "step": 58,
+      "size": 39,
+      "labelY": 467,
+      "captionY": 477,
+      "labelFontSize": 11,
+      "captionFontSize": 8,
+      "labelColor": "#ffc94a",
+      "captionColor": "rgba(255,255,255,0.70)",
+      "lockedOpacity": 0.45,
+      "lockedLabelColor": "rgba(255,201,74,0.45)",
+      "lockedCaptionColor": "rgba(255,255,255,0.35)",
+      "checkmark": {
+        "_comment": "解锁徽章内对号的位置，相对徽章中心的偏移比例",
+        "offsetX": -0.32,
+        "offsetY": 0.3,
+        "scaleX": 0.28,
+        "scaleY": 0.28,
+        "armX": 0.62,
+        "armY": -0.78,
+        "strokeColor": "#1a1200",
+        "strokeWidthRatio": 0.10
+      }
+    }
+  },
+  "social": {
+    "youtube": "https://youtube.com/@OlympicMotion",
+    "instagram": "https://instagram.com/OlympicMotion",
+    "tiktok": "https://tiktok.com/@OlympicMotion",
+    "x": "https://x.com/OlympicMotion"
+  },
+  "features": [
+    { "icon": "trophy",   "label": "Epic Moments" },
+    { "icon": "film",     "label": "Untold Stories" },
+    { "icon": "medal",    "label": "Olympic Legends" },
+    { "icon": "camera",   "label": "Behind The Scenes" },
+    { "icon": "calendar", "label": "Weekly Uploads" }
+  ],
+  "achievements": [
+    { "label": "100",  "caption": "Subscribers", "threshold": 100 },
+    { "label": "1K",   "caption": "Subscribers", "threshold": 1000 },
+    { "label": "10K",  "caption": "Subscribers", "threshold": 10000 },
+    { "label": "50K",  "caption": "Subscribers", "threshold": 50000 },
+    { "label": "100K", "caption": "Subscribers", "threshold": 100000 },
+    { "label": "500K", "caption": "Subscribers", "threshold": 500000 },
+    { "label": "1M",   "caption": "Subscribers", "threshold": 1000000 },
+    { "label": "5M",   "caption": "Subscribers", "threshold": 5000000 }
+  ],
+  "theme": "gold",
+  "showSafeArea": false,
+  "showProgressPercent": false
+}

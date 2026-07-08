@@ -12,13 +12,16 @@ import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, dirname }                     from "node:path";
 import { fileURLToPath }                        from "node:url";
 
-const ROOT   = resolve(fileURLToPath(new URL("../", import.meta.url)));
-const CONFIG = JSON.parse(readFileSync(resolve(ROOT, "public/config/banner.config.json"), "utf8"));
-// bg.png is a native YouTube full-size banner (2560×1440 or similar)
-// Fall back to old background.png if bg.png not found
-const BG_NEW = resolve(ROOT, "public/assets/bg.png");
-const BG_OLD = resolve(ROOT, "public/assets/background.png");
-const BG     = existsSync(BG_NEW) ? BG_NEW : BG_OLD;
+const ROOT       = resolve(fileURLToPath(new URL("../", import.meta.url)));
+// Config path: CHANNEL_CONFIG env var overrides legacy default
+const CONFIG_PATH = process.env.CHANNEL_CONFIG ?? resolve(ROOT, "public/config/banner.config.json");
+const CONFIG      = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
+// BG path: CHANNEL_BG env var overrides; fall back to bg.png then background.png
+const BG_DEFAULT_NEW = resolve(ROOT, "public/assets/bg.png");
+const BG_DEFAULT_OLD = resolve(ROOT, "public/assets/background.png");
+const BG_RESOLVED    = process.env.CHANNEL_BG
+  ?? (existsSync(BG_DEFAULT_NEW) ? BG_DEFAULT_NEW : BG_DEFAULT_OLD);
+const BG             = BG_RESOLVED;
 const OUTPUT = resolve(ROOT, "dist/banner-v2.png");
 const FULL   = resolve(ROOT, "dist/banner-v2-full.png");
 

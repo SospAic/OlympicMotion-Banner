@@ -18,8 +18,19 @@ import { resolve, dirname }                         from "node:path";
 import { fileURLToPath }                            from "node:url";
 import { spawn }                                    from "node:child_process";
 import { createRequire }                            from "node:module";
+import { resolveChannel, loadChannelEnv }           from "./scripts/channel.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
+
+// ── Multi-channel bootstrap ───────────────────────────────────────────────
+// Resolve active channel (from --channel=name arg or auto-detect single channel)
+const _channel = resolveChannel();
+if (_channel) {
+  loadChannelEnv(_channel.name);
+  // Expose paths to child processes (render-banner-v2, upload-banner, etc.)
+  if (!process.env.CHANNEL_CONFIG) process.env.CHANNEL_CONFIG = _channel.configPath;
+  if (!process.env.CHANNEL_BG)     process.env.CHANNEL_BG     = _channel.bgPath;
+}
 
 // ── Load .env file ────────────────────────────────────────────────────────
 function loadEnv() {

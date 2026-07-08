@@ -2,21 +2,35 @@
 /**
  * manage.mjs — OlympicMotion Banner Engine 管理菜单
  *
- * 用法：node scripts/manage.mjs
+ * 用法：
+ *   node scripts/manage.mjs                    # 单频道自动选择 / 多频道弹出选择器
+ *   node scripts/manage.mjs --channel=name     # 直接跳过选择器
  */
 
 import { createInterface }                     from "node:readline";
 import { existsSync, readFileSync,
-         writeFileSync, statSync }             from "node:fs";
+         readdirSync, writeFileSync, statSync } from "node:fs";
 import { resolve, dirname }                    from "node:path";
 import { fileURLToPath }                       from "node:url";
 import { spawn, execSync }                     from "node:child_process";
+import { resolveChannel, listChannels,
+         loadChannelEnv, parseChannelArg }     from "./channel.mjs";
 
 const ROOT        = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_ENC = resolve(ROOT, ".session/youtube-session.enc");
 const SESSION_JSON= resolve(ROOT, ".session/youtube-session.json");
 const ENV_FILE    = resolve(ROOT, ".env");
-const CONFIG_FILE = resolve(ROOT, "public/config/banner.config.json");
+
+// ── Active channel (resolved at startup) ─────────────────────────────────
+// Will be set by channel selector / auto-detect before mainMenu() runs
+let ACTIVE_CHANNEL = null;  // { name, root, configPath, bgPath, envPath } | null
+
+// Returns the active config file path (channel-specific or legacy)
+function getConfigFile() {
+  if (ACTIVE_CHANNEL && existsSync(ACTIVE_CHANNEL.configPath)) return ACTIVE_CHANNEL.configPath;
+  return resolve(ROOT, "public/config/banner.config.json");
+}
+
 const BANNER_FILE = resolve(ROOT, "dist/banner.png");
 
 // ── Colors ────────────────────────────────────────────────────────────────
@@ -109,7 +123,8 @@ function getStatus() {
   try {
     const out = execSync("pm2 jlist 2>/dev/null || echo '[]'", { encoding: "utf8" });
     const list = JSON.parse(out);
-    pm2Running = list.some(p => p.name === "banner-daemon" && p.pm2_env?.status === "online");
+    const pm2Name = process.env.CHANNEL_PM2_NAME ?? "banner-daemon";
+    pm2Running = list.some(p => p.name === pm2Name && p.pm2_env?.status === "online");
   } catch { /* ignore */ }
 
   // Check SSL cert expiry
@@ -167,7 +182,7 @@ function getStatus() {
     subs:        env.YOUTUBE_API_KEY ? "已配置" : "未配置",
     currentSubs: (() => {
       try {
-        const cfg = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+        const cfg = JSON.parse(readFileSync(getConfigFile(), "utf8"));
         return cfg.data?.subs ?? 0;
       } catch { return 0; }
     })(),
@@ -186,9 +201,10 @@ function statusLine(ok, label, detail = "") {
 // ── Header ────────────────────────────────────────────────────────────────
 function header(subtitle = "") {
   clear();
+  const channelTag = ACTIVE_CHANNEL ? ` ${dim(`[${ACTIVE_CHANNEL.name}]`)}` : "";
   console.log(bold(cyan("\n  ╔══════════════════════════════════════════╗")));
   console.log(bold(cyan("  ║  OlympicMotion Banner Engine              ║")));
-  console.log(bold(cyan("  ╚══════════════════════════════════════════╝")));
+  console.log(bold(cyan("  ╚══════════════════════════════════════════╝")) + channelTag);
   if (subtitle) console.log(`\n  ${yellow("▶")} ${bold(subtitle)}\n`);
   else console.log();
 }
@@ -450,7 +466,11 @@ async function menuDaemon() {
   // Use bash to ensure systemctl/journalctl are found regardless of PATH
   const sh = (cmd) => run("bash", ["-c", cmd]);
 
-  const daemonSt = pm2AppStatus("banner-daemon");
+  // Resolve channel-specific PM2 name and webhook port
+  const pm2Name    = process.env.CHANNEL_PM2_NAME ?? "banner-daemon";
+  const webhookPort= process.env.CHANNEL_WEBHOOK_PORT ?? loadEnv().WEBHOOK_PORT ?? "47832";
+
+  const daemonSt = pm2AppStatus(pm2Name);
   const caddySt  = svcStatus("caddy");
 
   console.log(`  ${dim("PM2 Banner守护进程：")} ${daemonSt}`);
@@ -485,26 +505,24 @@ async function menuDaemon() {
   switch (c) {
     // ── PM2 ──
     case "1":
-      await run("pm2", ["start", "scripts/watch-daemon.mjs", "--name", "banner-daemon"]);
+      await run("pm2", ["start", "scripts/watch-daemon.mjs", "--name", pm2Name]);
       await run("pm2", ["save"]);
       break;
     case "2":
-      await run("pm2", ["stop", "banner-daemon"]);
+      await run("pm2", ["stop", pm2Name]);
       break;
     case "3":
-      await run("pm2", ["restart", "banner-daemon"]);
+      await run("pm2", ["restart", pm2Name]);
       break;
     case "4":
-      await run("pm2", ["logs", "banner-daemon", "--lines", "50", "--nostream"]);
+      await run("pm2", ["logs", pm2Name, "--lines", "50", "--nostream"]);
       break;
     case "5":
       console.log(dim("  按 Ctrl+C 退出追踪\n"));
-      await run("pm2", ["logs", "banner-daemon"]);
+      await run("pm2", ["logs", pm2Name]);
       break;
     case "6": {
-      const env  = loadEnv();
-      const port = env.WEBHOOK_PORT ?? "47832";
-      await sh(`curl -s -w "\\n" http://localhost:${port}/health`);
+      await sh(`curl -s -w "\\n" http://localhost:${webhookPort}/health`);
       break;
     }
     case "7":
@@ -574,7 +592,7 @@ async function menuConfig() {
       console.log(); await run("nano", [".env"]);
       break;
     case "2":
-      console.log(); await run("nano", ["public/config/banner.config.json"]);
+      console.log(); await run("nano", [getConfigFile()]);
       break;
     case "3": {
       const env = loadEnv();
@@ -594,7 +612,7 @@ async function menuConfig() {
       show("POLL_INTERVAL_MINUTES");
       show("WEBHOOK_PUBLIC_URL");
       try {
-        const cfg = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+        const cfg = JSON.parse(readFileSync(getConfigFile(), "utf8"));
         console.log("\n  " + bold("banner.config.json 摘要："));
         console.log(`  ${"channelName".padEnd(28)} ${green(cfg.brand?.channelName ?? "-")}`);
         console.log(`  ${"mission.goal".padEnd(28)} ${green(cfg.mission?.goal?.toLocaleString() ?? "-")}`);
@@ -606,10 +624,10 @@ async function menuConfig() {
     case "4": {
       const goal = await ask("  输入新的订阅目标（如 100000）：");
       if (goal.trim() && !isNaN(Number(goal.trim()))) {
-        const cfg = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+        const cfg = JSON.parse(readFileSync(getConfigFile(), "utf8"));
         cfg.mission.goal  = Number(goal.trim());
         cfg.mission.title = `Road To <span>${(Number(goal.trim())/1000).toFixed(0).replace(".0","")}K</span> Champions`;
-        writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2) + "\n");
+        writeFileSync(getConfigFile(), JSON.stringify(cfg, null, 2) + "\n");
         console.log(green(`  ✓ 目标已更新为 ${Number(goal.trim()).toLocaleString()}`));
       }
       break;
@@ -617,9 +635,9 @@ async function menuConfig() {
     case "5": {
       const logo = await ask("  输入 Logo 路径（如 /assets/logo.png）：");
       if (logo.trim()) {
-        const cfg = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
+        const cfg = JSON.parse(readFileSync(getConfigFile(), "utf8"));
         cfg.brand.logo = logo.trim();
-        writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2) + "\n");
+        writeFileSync(getConfigFile(), JSON.stringify(cfg, null, 2) + "\n");
         console.log(green("  ✓ Logo 路径已更新"));
       }
       break;
@@ -676,6 +694,28 @@ async function fetchSubsPreview() {
   } catch { return "获取失败"; }
 }
 
+// ── Channel selector ──────────────────────────────────────────────────────
+/**
+ * Show an interactive channel selector and return the chosen channel name.
+ * Only called when multiple channels exist and no --channel arg was given.
+ */
+async function selectChannelInteractive(channels) {
+  clear();
+  console.log(bold(cyan("\n  ╔══════════════════════════════════════════╗")));
+  console.log(bold(cyan("  ║  OlympicMotion Banner Engine              ║")));
+  console.log(bold(cyan("  ╚══════════════════════════════════════════╝")));
+  console.log(`\n  ${yellow("▶")} ${bold("频道选择")}\n`);
+  channels.forEach((ch, i) => {
+    console.log(`  ${cyan(String(i + 1))}  ${ch}`);
+  });
+  console.log();
+  const choice = await ask(`  请选择频道 [1-${channels.length}]：`);
+  const idx = parseInt(choice.trim(), 10) - 1;
+  if (idx >= 0 && idx < channels.length) return channels[idx];
+  // Default to first channel on invalid input
+  return channels[0];
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────
 // Load .env into process.env before starting
 try {
@@ -695,5 +735,35 @@ try {
 
 // Wrap in async main to avoid top-level await warning on older Node versions
 (async () => {
+  // ── Resolve active channel ──────────────────────────────────────────────
+  const channels = listChannels();
+
+  if (channels.length > 0) {
+    // Try --channel=name arg first
+    const argName = parseChannelArg();
+    if (argName) {
+      // Skip selector — use named channel
+      const { channelDescriptor } = await import("./channel.mjs");
+      ACTIVE_CHANNEL = channelDescriptor(argName);
+    } else if (channels.length === 1) {
+      // Auto-select single channel silently
+      const { channelDescriptor } = await import("./channel.mjs");
+      ACTIVE_CHANNEL = channelDescriptor(channels[0]);
+    } else {
+      // Multiple channels — show selector
+      const chosen = await selectChannelInteractive(channels);
+      const { channelDescriptor } = await import("./channel.mjs");
+      ACTIVE_CHANNEL = channelDescriptor(chosen);
+    }
+
+    // Load channel-specific env vars
+    if (ACTIVE_CHANNEL) {
+      loadChannelEnv(ACTIVE_CHANNEL.name);
+      if (!process.env.CHANNEL_CONFIG) process.env.CHANNEL_CONFIG = ACTIVE_CHANNEL.configPath;
+      if (!process.env.CHANNEL_BG)     process.env.CHANNEL_BG     = ACTIVE_CHANNEL.bgPath;
+    }
+  }
+  // If channels/ doesn't exist → legacy mode, ACTIVE_CHANNEL stays null
+
   await mainMenu();
 })().catch(e => { console.error(e.message); process.exit(1); });

@@ -28,10 +28,11 @@ import { resolve }                                  from "node:path";
 import { fileURLToPath }                            from "node:url";
 import { createServer }                             from "node:http";
 import { spawn }                                    from "node:child_process";
+import { resolveChannel, loadChannelEnv }           from "./channel.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-// ── Load .env ─────────────────────────────────────────────────────────────
+// ── Load .env and optional channel .env.channel ───────────────────────────
 function loadEnv() {
   const envPath = resolve(ROOT, ".env");
   if (!existsSync(envPath)) return;
@@ -47,10 +48,21 @@ function loadEnv() {
 }
 loadEnv();
 
+// Load channel-specific env (--channel=name or auto-detect)
+const _channel = resolveChannel();
+if (_channel) {
+  loadChannelEnv(_channel.name);
+  if (!process.env.CHANNEL_CONFIG) process.env.CHANNEL_CONFIG = _channel.configPath;
+  if (!process.env.CHANNEL_BG)     process.env.CHANNEL_BG     = _channel.bgPath;
+}
+
 const API_KEY       = process.env.YOUTUBE_API_KEY;
 const CHANNEL_ID    = process.env.YOUTUBE_CHANNEL_ID;
 const POLL_MIN      = Math.max(1, Number(process.env.POLL_INTERVAL_MINUTES ?? 5));
-const WEBHOOK_PORT  = Number(process.env.WEBHOOK_PORT ?? 47832);
+// CHANNEL_WEBHOOK_PORT (from .env.channel) takes priority over legacy WEBHOOK_PORT
+const WEBHOOK_PORT  = Number(process.env.CHANNEL_WEBHOOK_PORT ?? process.env.WEBHOOK_PORT ?? 47832);
+// CHANNEL_PM2_NAME allows per-channel PM2 process names (e.g. banner-daemon-olympicmotion)
+const PM2_NAME      = process.env.CHANNEL_PM2_NAME ?? "banner-daemon";
 const PUBLIC_URL    = process.env.WEBHOOK_PUBLIC_URL ?? "";
 const STATE_FILE    = resolve(ROOT, ".session/daemon-state.json");
 
@@ -259,6 +271,7 @@ loadState();
 
 log("═══════════════════════════════════════");
 log("  OlympicMotion Banner Daemon 已启动");
+log(`  PM2 名称：${PM2_NAME}`);
 log(`  轮询间隔：每 ${POLL_MIN} 分钟`);
 log(`  Webhook 端口：${WEBHOOK_PORT}`);
 log("═══════════════════════════════════════");
