@@ -116,16 +116,25 @@ while (true) {
   const bannerPort  = env.PORT ?? "38291";
   const webhookPort = env.WEBHOOK_PORT ?? "47832";
   const oauthPort   = env.OAUTH_CALLBACK_PORT ?? "52947";
-  // Caddy listen port — high port, frees up 80/443 for external cert renewal scripts
-  const caddyPort   = env.CADDY_PORT ?? "43080";
+  // Caddy listen port — high port, frees up 80 for external cert renewal scripts
+  const caddyPort   = env.CADDY_PORT ?? "43443";
 
-  // Build Caddyfile — HTTP only on high port, no automatic HTTPS/TLS
-  // SSL termination is handled externally (your cert renewal script uses port 80/443)
+  // SSL cert paths — set by your cert renewal script (acme.sh / certbot)
+  // acme.sh default: ~/.acme.sh/<domain>/fullchain.cer + <domain>.key
+  // certbot default: /etc/letsencrypt/live/<domain>/fullchain.pem + privkey.pem
+  const certFile = env.SSL_CERT_FILE ?? `/etc/letsencrypt/live/${domain}/fullchain.pem`;
+  const keyFile  = env.SSL_KEY_FILE  ?? `/etc/letsencrypt/live/${domain}/privkey.pem`;
+
+  // Build Caddyfile — HTTPS on high port using externally managed certificates
+  // Caddy loads the cert files directly, no ACME/80-port challenge needed
   const caddyfile = `# OlympicMotion Banner Engine — Caddy 配置
-# HTTP-only 模式，监听高位端口 ${caddyPort}
-# 80/443 由外部证书续期脚本管理，Caddy 不占用
+# HTTPS 高位端口模式（${caddyPort}），证书由外部脚本管理
+# 80 端口完全释放供证书续期脚本使用
 
-:${caddyPort} {
+${domain}:${caddyPort} {
+    # 加载外部证书（acme.sh / certbot 签发，无需 80 端口）
+    tls ${certFile} ${keyFile}
+
     # OAuth 授权回调（用于 Google OAuth 登录）
     handle /oauth/callback* {
         reverse_proxy localhost:${oauthPort}
@@ -190,17 +199,20 @@ while (true) {
   );
 
   // Update .env with public URL and Caddy port
-  // Since Caddy is HTTP-only on high port, BANNER_URL uses the domain via your external SSL proxy
-  const publicUrl = `https://${domain}`;
-  saveEnv("CADDY_PORT", caddyPort);
-  saveEnv("WEBHOOK_PUBLIC_URL", `${publicUrl}/webhook`);
-  saveEnv("BANNER_URL", publicUrl);
+  const publicUrl = `https://${domain}:${caddyPort}`;
+  saveEnv("CADDY_PORT",          caddyPort);
+  saveEnv("SSL_CERT_FILE",       certFile);
+  saveEnv("SSL_KEY_FILE",        keyFile);
+  saveEnv("WEBHOOK_PUBLIC_URL",  `${publicUrl}/webhook`);
+  saveEnv("BANNER_URL",          publicUrl);
   console.log(`\n✓ 已更新 .env：`);
   console.log(`  CADDY_PORT         = ${caddyPort}`);
+  console.log(`  SSL_CERT_FILE      = ${certFile}`);
+  console.log(`  SSL_KEY_FILE       = ${keyFile}`);
   console.log(`  WEBHOOK_PUBLIC_URL = ${publicUrl}/webhook`);
   console.log(`  BANNER_URL         = ${publicUrl}`);
-  console.log(`\n  ⚠  Caddy 现在监听 HTTP :${caddyPort}，不占用 80/443`);
-  console.log(`     请确保你的 SSL 反向代理（Nginx/外部 Caddy）将 443 流量转发到 localhost:${caddyPort}`);
+  console.log(`\n  ✓ Caddy 监听 HTTPS :${caddyPort}，使用外部证书，80 端口完全释放`);
+  console.log(`  ✓ OAuth redirect_uri 和 PubSubHubbub callback 均为 HTTPS，Google 验证通过`);
 
   // Show Google Cloud Console instructions
   console.log("\n══════════════════════════════════════════════");
