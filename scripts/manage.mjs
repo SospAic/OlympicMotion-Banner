@@ -163,6 +163,7 @@ function getStatus() {
     certDaysLeft,
     nodeCertExists,
     nodeCertDaysLeft,
+    nodeDomain:     env.NODE_DOMAIN ?? "",
     subs:        env.YOUTUBE_API_KEY ? "已配置" : "未配置",
     currentSubs: (() => {
       try {
@@ -228,7 +229,8 @@ async function mainMenu() {
     else if (st.nodeCertDaysLeft === null)    detail = "无法读取";
     else if (st.nodeCertDaysLeft < 0)         detail = `已过期 ${Math.abs(st.nodeCertDaysLeft)} 天`;
     else                                      detail = `剩余 ${st.nodeCertDaysLeft} 天`;
-    console.log(statusLine(ok, "节点 SSL 证书", detail));
+    const nodeLabel = st.nodeDomain ? `节点证书 (${st.nodeDomain})` : "节点 SSL 证书";
+    console.log(statusLine(ok, nodeLabel, detail));
   }
   if (st.currentSubs) {
     console.log(`\n  ${dim("当前订阅数：")} ${yellow(st.currentSubs.toLocaleString())}`);
