@@ -112,6 +112,17 @@ function getStatus() {
     pm2Running = list.some(p => p.name === "banner-daemon" && p.pm2_env?.status === "online");
   } catch { /* ignore */ }
 
+  // Check SSL cert expiry
+  let certDaysLeft = null;
+  try {
+    const certFile = env.SSL_CERT_FILE ?? "/root/ygkkkca/cert.crt";
+    if (existsSync(certFile)) {
+      const out = execSync(`openssl x509 -enddate -noout -in "${certFile}" 2>/dev/null`, { encoding: "utf8" }).trim();
+      const match = out.match(/notAfter=(.+)/);
+      if (match) certDaysLeft = Math.floor((new Date(match[1]) - Date.now()) / 86400000);
+    }
+  } catch { /* ignore */ }
+
   return {
     hasEnv,
     hasApiKey:   !!(env.YOUTUBE_API_KEY),
@@ -122,6 +133,7 @@ function getStatus() {
     hasBanner,
     bannerAge,
     pm2Running,
+    certDaysLeft,
     subs:        env.YOUTUBE_API_KEY ? "已配置" : "未配置",
     currentSubs: (() => {
       try {
@@ -163,6 +175,11 @@ async function mainMenu() {
   console.log(statusLine(st.hasEncKey,  "Session 加密"));
   console.log(statusLine(st.hasBanner,  "Banner 文件",     st.hasBanner ? `生成于 ${st.bannerAge}` : ""));
   console.log(statusLine(st.pm2Running, "守护进程 (pm2)",  st.pm2Running ? "运行中" : "未运行"));
+  if (st.certDaysLeft !== null) {
+    const certOk = st.certDaysLeft > 14;
+    const certDetail = st.certDaysLeft > 0 ? `剩余 ${st.certDaysLeft} 天` : "已过期！";
+    console.log(statusLine(certOk, "SSL 证书",           certDetail));
+  }
   if (st.currentSubs) {
     console.log(`\n  ${dim("当前订阅数：")} ${yellow(st.currentSubs.toLocaleString())}`);
   }
@@ -195,11 +212,12 @@ async function menuInstall() {
   header("安装 & 初始化");
   console.log(`  ${cyan("1")}  Ubuntu 一键安装（推荐，全自动）`);
   console.log(`  ${cyan("2")}  配置域名 + HTTPS + OAuth 回调 (Caddy)`);
-  console.log(`  ${cyan("3")}  仅安装/更新 npm 依赖`);
-  console.log(`  ${cyan("4")}  安装 Playwright Chromium`);
-  console.log(`  ${cyan("5")}  安装 Playwright 系统依赖`);
-  console.log(`  ${cyan("6")}  安装 PM2 进程管理器`);
-  console.log(`  ${cyan("7")}  更新项目代码 (git pull)`);
+  console.log(`  ${cyan("3")}  SSL 证书申请 & 自动续期`);
+  console.log(`  ${cyan("4")}  仅安装/更新 npm 依赖`);
+  console.log(`  ${cyan("5")}  安装 Playwright Chromium`);
+  console.log(`  ${cyan("6")}  安装 Playwright 系统依赖`);
+  console.log(`  ${cyan("7")}  安装 PM2 进程管理器`);
+  console.log(`  ${cyan("8")}  更新项目代码 (git pull)`);
   console.log(`  ${cyan("0")}  返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
@@ -214,18 +232,21 @@ async function menuInstall() {
       console.log(); await runScript("scripts/setup-caddy.mjs");
       break;
     case "3":
-      console.log(); await run("npm", ["ci"]);
+      console.log(); await runScript("scripts/renew-cert.mjs");
       break;
     case "4":
-      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install", "chromium"]);
+      console.log(); await run("npm", ["ci"]);
       break;
     case "5":
-      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install-deps", "chromium"]);
+      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install", "chromium"]);
       break;
     case "6":
-      console.log(); await run("npm", ["install", "-g", "pm2"]);
+      console.log(); await run(process.execPath, ["node_modules/playwright/cli.js", "install-deps", "chromium"]);
       break;
     case "7":
+      console.log(); await run("npm", ["install", "-g", "pm2"]);
+      break;
+    case "8":
       console.log(); await run("git", ["pull", "--rebase", "origin", "main"]);
       break;
     case "0": break;

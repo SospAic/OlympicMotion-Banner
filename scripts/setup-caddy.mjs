@@ -122,8 +122,8 @@ while (true) {
   // SSL cert paths — set by your cert renewal script (acme.sh / certbot)
   // acme.sh default: ~/.acme.sh/<domain>/fullchain.cer + <domain>.key
   // certbot default: /etc/letsencrypt/live/<domain>/fullchain.pem + privkey.pem
-  const certFile = env.SSL_CERT_FILE ?? `/etc/letsencrypt/live/${domain}/fullchain.pem`;
-  const keyFile  = env.SSL_KEY_FILE  ?? `/etc/letsencrypt/live/${domain}/privkey.pem`;
+  const certFile = env.SSL_CERT_FILE ?? `/root/ygkkkca/cert.crt`;
+  const keyFile  = env.SSL_KEY_FILE  ?? `/root/ygkkkca/private.key`;
 
   // Build Caddyfile — HTTPS on high port using externally managed certificates
   // Caddy loads the cert files directly, no ACME/80-port challenge needed
