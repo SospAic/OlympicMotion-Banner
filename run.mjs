@@ -134,7 +134,8 @@ async function fetchSubscribers() {
 
 // ── Step 2: Update config ─────────────────────────────────────────────────
 function updateConfig(subs) {
-  const configPath = resolve(ROOT, "public/config/banner.config.json");
+  // Use channel-specific config if available, fall back to legacy path
+  const configPath = process.env.CHANNEL_CONFIG ?? resolve(ROOT, "public/config/banner.config.json");
   const cfg        = JSON.parse(readFileSync(configPath, "utf8"));
   const oldSubs    = cfg.data?.subs ?? 0;
 
