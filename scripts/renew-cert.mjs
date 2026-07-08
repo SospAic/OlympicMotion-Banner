@@ -120,6 +120,12 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
       "-d", domain,
       "--server", "letsencrypt",
     ];
+    // NameSilo DNS propagation is slow — add extra sleep
+    if (dnsProvider === "dns_namesilo" || dnsEnvVars["_DNS_SLEEP"]) {
+      const sleep = dnsEnvVars["_DNS_SLEEP"] ?? "300";
+      issueArgs.push("--dnssleep", sleep);
+      delete dnsEnvVars["_DNS_SLEEP"];
+    }
     for (const [k, v] of Object.entries(dnsEnvVars)) process.env[k] = v;
   } else if (method === "webroot") {
     const webroot = "/var/www/acme-challenge";
@@ -465,8 +471,8 @@ async function flowAcme(env, type) {
   let dnsProvider = "";
   const dnsEnvVars = {};
   if (method === "dns") {
-    console.log(`\n  常用 DNS 提供商：dns_cf（Cloudflare）dns_dp（DNSPod）dns_ali（阿里云）`);
-    dnsProvider = (await ask("  DNS 提供商 [dns_cf]：")) || "dns_cf";
+    console.log(`\n  常用 DNS 提供商：dns_cf（Cloudflare）dns_dp（DNSPod）dns_ali（阿里云）${C("dns_namesilo（NameSilo）")}`);
+    dnsProvider = (await ask("  DNS 提供商 [dns_namesilo]：")) || "dns_namesilo";
     if (dnsProvider === "dns_cf") {
       const cfToken = await ask("  Cloudflare API Token：");
       if (cfToken) { dnsEnvVars["CF_Token"] = cfToken; saveEnv("CF_TOKEN", cfToken); }
@@ -475,6 +481,14 @@ async function flowAcme(env, type) {
         dnsEnvVars["CF_Email"] = await ask("  CF_Email：");
         saveEnv("CF_KEY", dnsEnvVars["CF_Key"]); saveEnv("CF_EMAIL", dnsEnvVars["CF_Email"]);
       }
+    } else if (dnsProvider === "dns_namesilo") {
+      const key = (await ask(`  NameSilo API Key [${env.NAMESILO_KEY ?? ""}]：`)) || env.NAMESILO_KEY || "";
+      if (!key) { console.log(R("  API Key 不能为空")); return; }
+      dnsEnvVars["Namesilo_Key"] = key;
+      saveEnv("NAMESILO_KEY", key);
+      // NameSilo DNS propagation is slow — need extra sleep
+      dnsEnvVars["_DNS_SLEEP"] = "300";
+      console.log(Y("  ℹ  NameSilo DNS 传播较慢，将等待 5 分钟后验证"));
     } else if (dnsProvider === "dns_dp") {
       dnsEnvVars["DP_Id"]  = await ask("  DNSPod ID：");
       dnsEnvVars["DP_Key"] = await ask("  DNSPod Key：");
