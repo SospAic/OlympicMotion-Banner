@@ -430,7 +430,7 @@ async function menuDaemon() {
   // ── Collect service status ──────────────────────────────────────────────
   function svcStatus(name) {
     try {
-      const s = execSync(`systemctl is-active ${name} 2>/dev/null`, { encoding: "utf8" }).trim();
+      const s = execSync(`systemctl is-active ${name} 2>/dev/null || echo inactive`, { encoding: "utf8" }).trim();
       return s === "active" ? green("运行中") : red(s);
     } catch { return red("未知"); }
   }
@@ -444,6 +444,9 @@ async function menuDaemon() {
       return d.pm2_env?.status === "online" ? green("运行中") : red(d.pm2_env?.status);
     } catch { return red("未知"); }
   }
+
+  // Use bash to ensure systemctl/journalctl are found regardless of PATH
+  const sh = (cmd) => run("bash", ["-c", cmd]);
 
   const daemonSt = pm2AppStatus("banner-daemon");
   const caddySt  = svcStatus("caddy");
@@ -463,16 +466,16 @@ async function menuDaemon() {
   console.log(`  ${bold(cyan("── Caddy 反向代理 ──"))}`);
   console.log(`  ${cyan("8")}  启动 Caddy`);
   console.log(`  ${cyan("9")}  停止 Caddy`);
-  console.log(`  ${cyan("r")}  重启 Caddy`);
-  console.log(`  ${cyan("R")}  重载 Caddy（不中断连接）`);
-  console.log(`  ${cyan("c")}  查看 Caddy 日志（最近 50 行）`);
-  console.log(`  ${cyan("C")}  查看 Caddy 运行状态详情`);
+  console.log(`  ${cyan("10")}  重启 Caddy`);
+  console.log(`  ${cyan("11")}  重载 Caddy（不中断连接）`);
+  console.log(`  ${cyan("12")}  查看 Caddy 日志（最近 50 行）`);
+  console.log(`  ${cyan("13")}  查看 Caddy 运行状态详情`);
   console.log();
   console.log(`  ${bold(cyan("── 其他 ──"))}`);
-  console.log(`  ${cyan("p")}  查看所有 PM2 进程`);
-  console.log(`  ${cyan("s")}  查看系统端口占用（ss -tlnp）`);
-  console.log(`  ${cyan("t")}  查看 cron 定时任务`);
-  console.log(`  ${cyan("0")}  返回主菜单\n`);
+  console.log(`  ${cyan("14")}  查看所有 PM2 进程`);
+  console.log(`  ${cyan("15")}  查看系统端口占用`);
+  console.log(`  ${cyan("16")}  查看 cron 定时任务`);
+  console.log(`  ${cyan("0")}   返回主菜单\n`);
 
   const c = (await ask("  请选择：")).trim();
   console.log();
@@ -498,43 +501,43 @@ async function menuDaemon() {
     case "6": {
       const env  = loadEnv();
       const port = env.WEBHOOK_PORT ?? "47832";
-      await run("curl", ["-s", "-w", "\n", `http://localhost:${port}/health`]);
+      await sh(`curl -s -w "\\n" http://localhost:${port}/health`);
       break;
     }
     case "7":
       await run("pm2", ["save"]);
-      await run("pm2", ["startup"]);
+      await sh("pm2 startup");
       break;
     // ── Caddy ──
     case "8":
-      await run("systemctl", ["start", "caddy"]);
+      await sh("systemctl start caddy && echo '✓ Caddy 已启动'");
       break;
     case "9": {
       const confirm = (await ask("  确认停止 Caddy？HTTPS 服务将中断 (y/N)：")).toLowerCase();
-      if (confirm === "y") await run("systemctl", ["stop", "caddy"]);
+      if (confirm === "y") await sh("systemctl stop caddy && echo '✓ Caddy 已停止'");
       break;
     }
-    case "r":
-      await run("systemctl", ["restart", "caddy"]);
+    case "10":
+      await sh("systemctl restart caddy && echo '✓ Caddy 已重启'");
       break;
-    case "R":
-      await run("systemctl", ["reload", "caddy"]);
+    case "11":
+      await sh("systemctl reload caddy && echo '✓ Caddy 已重载'");
       break;
-    case "c":
-      await run("journalctl", ["-u", "caddy", "-n", "50", "--no-pager"]);
+    case "12":
+      await sh("journalctl -u caddy -n 50 --no-pager 2>/dev/null || tail -50 /var/log/caddy/olympicmotion.log 2>/dev/null || echo '未找到日志'");
       break;
-    case "C":
-      await run("systemctl", ["status", "caddy", "--no-pager"]);
+    case "13":
+      await sh("systemctl status caddy --no-pager");
       break;
     // ── Other ──
-    case "p":
+    case "14":
       await run("pm2", ["list"]);
       break;
-    case "s":
-      await run("bash", ["-c", "ss -tlnp | head -40"]);
+    case "15":
+      await sh("ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null || echo '需要安装 iproute2'");
       break;
-    case "t":
-      await run("crontab", ["-l"]);
+    case "16":
+      await sh("crontab -l 2>/dev/null || echo '无 cron 任务'");
       break;
     case "0": break;
     default: console.log(yellow("  无效选项"));
