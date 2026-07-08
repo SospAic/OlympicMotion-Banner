@@ -259,17 +259,19 @@ async function mainMenu() {
   console.log(`  ${cyan("4")}  服务管理`);
   console.log(`  ${cyan("5")}  配置管理`);
   console.log(`  ${cyan("6")}  查看日志`);
+  console.log(`  ${cyan("C")}  切换 / 新增频道`);
   console.log(`  ${cyan("0")}  退出`);
   console.log();
 
-  const choice = await ask(`  请选择 [0-6]：`);
-  switch (choice.trim()) {
+  const choice = await ask(`  请选择 [0-6 / C]：`);
+  switch (choice.trim().toUpperCase()) {
     case "1": await menuInstall();  break;
     case "2": await menuSession();  break;
     case "3": await menuBanner();   break;
     case "4": await menuDaemon();   break;
     case "5": await menuConfig();   break;
     case "6": await menuLogs();     break;
+    case "C": await menuSwitchChannel(); break;
     case "0": rl.close(); console.log("\n  再见！\n"); process.exit(0);
     default:  await mainMenu();
   }
@@ -692,6 +694,47 @@ async function fetchSubsPreview() {
     const d = await r.json();
     return d.items?.[0]?.statistics?.subscriberCount ?? "获取失败";
   } catch { return "获取失败"; }
+}
+
+// ── Switch / manage channels ──────────────────────────────────────────────
+async function menuSwitchChannel() {
+  clear();
+  console.log(bold(cyan("\n  ╔══════════════════════════════════════════╗")));
+  console.log(bold(cyan("  ║  频道管理                                 ║")));
+  console.log(bold(cyan("  ╚══════════════════════════════════════════╝\n")));
+
+  const channels = listChannels();
+  if (channels.length > 0) {
+    console.log("  " + bold("已有频道："));
+    channels.forEach((ch, i) => {
+      const active = ACTIVE_CHANNEL?.name === ch ? green(" ← 当前") : "";
+      console.log(`  ${cyan(String(i + 1))}  ${ch}${active}`);
+    });
+  }
+  console.log();
+  console.log(`  ${cyan("N")}  新增频道`);
+  console.log(`  ${cyan("0")}  返回主菜单\n`);
+
+  const choice = (await ask(`  请选择：`)).trim().toUpperCase();
+
+  if (choice === "N") {
+    await menuCreateChannel();
+    await mainMenu();
+    return;
+  }
+  if (choice === "0") { await mainMenu(); return; }
+
+  const idx = parseInt(choice, 10) - 1;
+  if (idx >= 0 && idx < channels.length) {
+    const { channelDescriptor } = await import("./channel.mjs");
+    ACTIVE_CHANNEL = channelDescriptor(channels[idx]);
+    loadChannelEnv(ACTIVE_CHANNEL.name);
+    process.env.CHANNEL_CONFIG = ACTIVE_CHANNEL.configPath;
+    process.env.CHANNEL_BG     = ACTIVE_CHANNEL.bgPath;
+    console.log(green(`\n  ✓ 已切换到频道：${ACTIVE_CHANNEL.name}`));
+    await pause();
+  }
+  await mainMenu();
 }
 
 // ── Create new channel ────────────────────────────────────────────────────
