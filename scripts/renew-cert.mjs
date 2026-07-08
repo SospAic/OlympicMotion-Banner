@@ -165,8 +165,10 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   const reloadCmd = method === "standalone"
     ? "systemctl start caddy 2>/dev/null || true"
     : "systemctl reload caddy 2>/dev/null || true";
+
+  // Use --ecc flag since acme.sh defaults to ECC (P-256) which stores in domain_ecc/
   const installArgs = [
-    "--install-cert", "-d", domain,
+    "--install-cert", "-d", domain, "--ecc",
     "--cert-file",      `${certDir}/cert.crt`,
     "--key-file",       `${certDir}/private.key`,
     "--fullchain-file", `${certDir}/fullchain.pem`,
@@ -276,7 +278,7 @@ async function renewOnly() {
     if (bannerInfo.daysLeft <= 30 && bannerDomain) {
       const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
       if (existsSync(acme)) {
-        const code = await run(acme, ["--renew", "-d", bannerDomain]);
+        const code = await run(acme, ["--renew", "-d", bannerDomain, "--ecc"]);
         if (code === 0) {
           tryExec("systemctl reload caddy 2>/dev/null || true");
           console.log(`${ts()} ✓ Banner 证书续期成功，Caddy 已重载`);
@@ -301,7 +303,7 @@ async function renewOnly() {
         const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
         if (existsSync(acme)) {
           const reloadCmd = env.NODE_RELOAD_CMD ?? "echo '节点服务已通知续期'";
-          const code = await run(acme, ["--renew", "-d", nodeDomain]);
+          const code = await run(acme, ["--renew", "-d", nodeDomain, "--ecc"]);
           if (code === 0) {
             tryExec(reloadCmd);
             console.log(`${ts()} ✓ 节点证书续期成功`);
@@ -451,7 +453,7 @@ async function flowCheck(env, type) {
       const domain = env[k.domain] ?? "";
       const acme   = `${process.env.HOME}/.acme.sh/acme.sh`;
       if (existsSync(acme) && domain) {
-        const code = await run(acme, ["--renew", "-d", domain, "--force"]);
+        const code = await run(acme, ["--renew", "-d", domain, "--force", "--ecc"]);
         if (code === 0) {
           tryExec(type === "banner"
             ? "systemctl reload caddy 2>/dev/null || true"
