@@ -116,12 +116,16 @@ while (true) {
   const bannerPort  = env.PORT ?? "38291";
   const webhookPort = env.WEBHOOK_PORT ?? "47832";
   const oauthPort   = env.OAUTH_CALLBACK_PORT ?? "52947";
+  // Caddy listen port — high port, frees up 80/443 for external cert renewal scripts
+  const caddyPort   = env.CADDY_PORT ?? "43080";
 
-  // Build Caddyfile
+  // Build Caddyfile — HTTP only on high port, no automatic HTTPS/TLS
+  // SSL termination is handled externally (your cert renewal script uses port 80/443)
   const caddyfile = `# OlympicMotion Banner Engine — Caddy 配置
-# 自动 HTTPS，证书由 Let's Encrypt 签发
+# HTTP-only 模式，监听高位端口 ${caddyPort}
+# 80/443 由外部证书续期脚本管理，Caddy 不占用
 
-${domain} {
+:${caddyPort} {
     # OAuth 授权回调（用于 Google OAuth 登录）
     handle /oauth/callback* {
         reverse_proxy localhost:${oauthPort}
@@ -185,13 +189,18 @@ ${domain} {
     run("caddy", ["reload", "--config", CADDY_FILE])
   );
 
-  // Update .env with public URL
+  // Update .env with public URL and Caddy port
+  // Since Caddy is HTTP-only on high port, BANNER_URL uses the domain via your external SSL proxy
   const publicUrl = `https://${domain}`;
+  saveEnv("CADDY_PORT", caddyPort);
   saveEnv("WEBHOOK_PUBLIC_URL", `${publicUrl}/webhook`);
   saveEnv("BANNER_URL", publicUrl);
   console.log(`\n✓ 已更新 .env：`);
+  console.log(`  CADDY_PORT         = ${caddyPort}`);
   console.log(`  WEBHOOK_PUBLIC_URL = ${publicUrl}/webhook`);
   console.log(`  BANNER_URL         = ${publicUrl}`);
+  console.log(`\n  ⚠  Caddy 现在监听 HTTP :${caddyPort}，不占用 80/443`);
+  console.log(`     请确保你的 SSL 反向代理（Nginx/外部 Caddy）将 443 流量转发到 localhost:${caddyPort}`);
 
   // Show Google Cloud Console instructions
   console.log("\n══════════════════════════════════════════════");
