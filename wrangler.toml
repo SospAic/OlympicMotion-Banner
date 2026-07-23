@@ -1,4 +1,4 @@
-name = "olympicmotion-banner-engine"
+name = "olympicmotionbanner"
 main = "worker/index.js"
 compatibility_date = "2026-06-27"
 
