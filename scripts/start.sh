@@ -39,7 +39,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$ROOT/.env"
 LOG_FILE="/var/log/olympicmotion-banner.log"
-PM2_APP="banner-daemon"
+# Use CHANNEL_PM2_NAME if set (multi-channel), otherwise default
+PM2_APP="${CHANNEL_PM2_NAME:-banner-daemon}"
 SERVICE_NAME="olympicmotion-banner"
 
 cd "$ROOT"

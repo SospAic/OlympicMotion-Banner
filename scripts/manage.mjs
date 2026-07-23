@@ -672,7 +672,7 @@ async function menuLogs() {
       await run("tail", ["-f", log]);
       break;
     case "3":
-      console.log(); await run("pm2", ["logs", "banner-daemon", "--lines", "50"]);
+      console.log(); await run("pm2", ["logs", process.env.CHANNEL_PM2_NAME ?? "banner-daemon", "--lines", "50"]);
       break;
     case "0": break;
   }

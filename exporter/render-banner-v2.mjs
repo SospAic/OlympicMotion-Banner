@@ -22,10 +22,18 @@ const BG_DEFAULT_OLD = resolve(ROOT, "public/assets/background.png");
 const BG_RESOLVED    = process.env.CHANNEL_BG
   ?? (existsSync(BG_DEFAULT_NEW) ? BG_DEFAULT_NEW : BG_DEFAULT_OLD);
 const BG             = BG_RESOLVED;
-const OUTPUT = resolve(ROOT, "dist/banner-v2.png");
-const FULL   = resolve(ROOT, "dist/banner-v2-full.png");
+// Output to channel-specific dist dir when running under a channel context
+// This prevents two channels on the same VPS from overwriting each other's output
+const CHANNEL_NAME = process.env.CHANNEL_PM2_NAME?.replace("banner-daemon-", "")
+  ?? process.env.CHANNEL_CONFIG?.match(/channels\/([^/]+)\/config/)?.[1]
+  ?? null;
+const DIST_DIR = CHANNEL_NAME
+  ? resolve(ROOT, `dist/${CHANNEL_NAME}`)
+  : resolve(ROOT, "dist");
+const OUTPUT = resolve(DIST_DIR, "banner-v2.png");
+const FULL   = resolve(DIST_DIR, "banner-v2-full.png");
 
-mkdirSync(dirname(OUTPUT), { recursive: true });
+mkdirSync(DIST_DIR, { recursive: true });
 
 if (!existsSync(BG)) {
   console.error("❌ background.png not found:", BG);

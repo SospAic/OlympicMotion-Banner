@@ -141,8 +141,13 @@ async function triggerUpdate(subs, reason) {
   log(`🚀 触发 Banner 更新 #${updateCount}，原因：${reason}，订阅数：${subs}`);
 
   // Default to v2 (Sharp, no browser) — faster and more stable
+  // Pass --channel arg so run.mjs knows which channel config/bg to use
+  const channelArg = process.env.CHANNEL_PM2_NAME
+    ? `--channel=${process.env.CHANNEL_PM2_NAME.replace("banner-daemon-", "")}`
+    : null;
   const args = ["run.mjs", "--v2"];
   if (subs > 0) args.push(`--subs=${subs}`);
+  if (channelArg) args.push(channelArg);
 
   await new Promise((resolve) => {
     const proc = spawn(process.execPath, args, {

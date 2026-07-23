@@ -281,7 +281,12 @@ async function main() {
       await renderBannerV2();
 
       // Set BANNER_FILE so upload-banner.mjs picks up v2 output
-      process.env.BANNER_FILE = resolve(ROOT, "dist/banner-v2.png");
+      // Use channel-specific dist dir if channel is active
+      const channelName = process.env.CHANNEL_PM2_NAME?.replace("banner-daemon-", "")
+        ?? process.env.CHANNEL_CONFIG?.match(/channels\/([^/]+)\/config/)?.[1]
+        ?? null;
+      const distDir = channelName ? `dist/${channelName}` : "dist";
+      process.env.BANNER_FILE = resolve(ROOT, `${distDir}/banner-v2.png`);
 
     } else {
       // ── V1 path: Playwright screenshot ──
