@@ -113,15 +113,17 @@ GOOGLE_REFRESH_TOKEN=1//04xxx...    # vps-login.mjs 自动填入
 
 # 域名配置（setup-caddy.mjs 自动填入）
 DOMAIN=om.example.com
-BANNER_URL=https://om.example.com
-WEBHOOK_PUBLIC_URL=https://om.example.com/webhook
+BANNER_URL=https://om.example.com:43443
+WEBHOOK_PUBLIC_URL=https://om.example.com:43443/webhook
 
 # Session 加密密钥（可选，AES-256-GCM）
 SESSION_ENCRYPTION_KEY=             # encrypt-session.mjs --gen-key 生成
 
 # 守护进程配置
 POLL_INTERVAL_MINUTES=5             # 订阅数轮询间隔（分钟，最低 1）
-WEBHOOK_PORT=4174                   # PubSubHubbub Webhook 端口
+WEBHOOK_PORT=47832                  # PubSubHubbub Webhook 端口（仅本机监听）
+OAUTH_CALLBACK_PORT=52947           # OAuth 回调端口（仅本机监听）
+CADDY_PORT=43443                    # HTTPS 高位端口；80/443 留给其他服务
 ```
 
 ---
@@ -210,6 +212,8 @@ node scripts/vps-login.mjs
 # 先把域名 A 记录指向 VPS IP，然后：
 node scripts/setup-caddy.mjs
 ```
+
+OlympicMotion 站点监听 `CADDY_PORT`（默认 `43443`）。配置脚本会以独立片段加入 Caddy，并保留主配置中的其他站点；若要释放整机 80/443，还需确认其他 Caddy 站点和服务没有绑定这两个端口。证书由外部 acme.sh 管理时，域名证书建议使用 DNS-01 API 模式自动签发和续期；HTTP-01 standalone 会临时占用 80。通过域名访问时需带端口，例如 `https://om.example.com:43443`，并在 Google OAuth 客户端登记同一个回调 URL。
 
 ---
 

@@ -227,8 +227,8 @@ function startWebhookServer() {
     res.end("not found");
   });
 
-  server.listen(WEBHOOK_PORT, () => {
-    log(`✓ Webhook 服务器已启动，端口：${WEBHOOK_PORT}`);
+  server.listen(WEBHOOK_PORT, "127.0.0.1", () => {
+    log(`✓ Webhook 服务器已启动，监听 127.0.0.1:${WEBHOOK_PORT}`);
     if (PUBLIC_URL) {
       log(`  公网地址：${PUBLIC_URL}`);
       subscribeToYouTubePush();

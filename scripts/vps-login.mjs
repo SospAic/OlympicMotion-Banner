@@ -30,7 +30,6 @@ import { chromium }                                   from "playwright";
 const ROOT         = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SESSION_DIR  = resolve(ROOT, ".session");
 const SESSION_FILE = resolve(SESSION_DIR, "youtube-session.json");
-const CALLBACK_PORT = Number(process.env.CHANNEL_OAUTH_PORT ?? process.env.OAUTH_CALLBACK_PORT ?? 52947);
 
 const SCOPE = [
   "https://www.googleapis.com/auth/youtube",
@@ -57,6 +56,8 @@ try {
   }
 } catch { /* ignore */ }
 
+const CALLBACK_PORT = Number(process.env.CHANNEL_OAUTH_PORT ?? process.env.OAUTH_CALLBACK_PORT ?? 52947);
+
 mkdirSync(SESSION_DIR, { recursive: true });
 mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 
@@ -64,8 +65,12 @@ mkdirSync(resolve(ROOT, "dist"), { recursive: true });
 const RAW_DOMAIN   = (process.env.DOMAIN ?? "").trim().replace(/[\r\n]/g, "");
 const DOMAIN_VALID = /^[a-z0-9][a-z0-9\-]*(\.[a-z0-9\-]+)+$/i.test(RAW_DOMAIN);
 const DOMAIN       = DOMAIN_VALID ? RAW_DOMAIN : "";
+const CADDY_PORT   = Number(process.env.CADDY_PORT ?? 443);
+const PUBLIC_ORIGIN = DOMAIN
+  ? `https://${DOMAIN}${CADDY_PORT === 443 ? "" : `:${CADDY_PORT}`}`
+  : "";
 const REDIRECT_URI = DOMAIN
-  ? `https://${DOMAIN}/oauth/callback`
+  ? `${PUBLIC_ORIGIN}/oauth/callback`
   : `http://localhost:${CALLBACK_PORT}/callback`;
 const USE_DOMAIN   = !!DOMAIN;
 
@@ -226,7 +231,8 @@ const authCode = await new Promise((resolve, reject) => {
     }
   });
 
-  // Listen on all interfaces so Caddy can reach it
+  // Caddy and SSH tunnel both connect through loopback; keep the callback
+  // server inaccessible directly from the public network.
   server.on("error", (err) => {
     if (err.code === "EADDRINUSE") {
       console.error(`❌ 端口 ${CALLBACK_PORT} 已被占用，请先释放：`);
@@ -237,8 +243,8 @@ const authCode = await new Promise((resolve, reject) => {
     reject(err);
   });
 
-  server.listen(CALLBACK_PORT, "0.0.0.0", () => {
-    console.log(`  ✓ HTTP 回调服务器已启动，监听 0.0.0.0:${CALLBACK_PORT}`);
+  server.listen(CALLBACK_PORT, "127.0.0.1", () => {
+    console.log(`  ✓ HTTP 回调服务器已启动，监听 127.0.0.1:${CALLBACK_PORT}`);
     console.log(`  ✓ 等待 Google 授权回调...\n`);
     if (USE_DOMAIN) {
       console.log(`  回调地址：${REDIRECT_URI}`);

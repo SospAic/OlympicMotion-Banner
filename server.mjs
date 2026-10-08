@@ -27,6 +27,6 @@ createServer((request, response) => {
     "cache-control": "no-store"
   });
   createReadStream(target).pipe(response);
-}).listen(port, () => {
+}).listen(port, "127.0.0.1", () => {
   console.log(`OlympicMotion Banner Engine running at http://localhost:${port}`);
 });

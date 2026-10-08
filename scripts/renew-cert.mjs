@@ -158,6 +158,10 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   const issueCode = await run(acme, issueArgs);
 
   if (issueCode !== 0 && issueCode !== 2) {
+    if (method === "standalone") {
+      try { execSync("systemctl start caddy 2>/dev/null || true"); } catch {}
+      console.log(G("  ✓ Caddy 已重新启动"));
+    }
     throw new Error(`证书申请失败（退出码 ${issueCode}）`);
   }
 
@@ -206,7 +210,9 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   if (method === "standalone") console.log(G("  ✓ Caddy 已重新启动"));
 
   return {
-    certFile: outCert,
+    // Caddy must serve the full chain; the leaf-only cert file can fail
+    // verification for clients that do not already have the issuer cached.
+    certFile: type === "node" ? outCert : outFull,
     keyFile:  outKey,
   };
 }
@@ -535,11 +541,11 @@ async function flowAcme(env, type) {
   const certDir = (await ask(`  证书保存目录 [${k.defaultDir}]：`)) || k.defaultDir;
 
   console.log(`\n  验证方式：`);
-  console.log(`  ${C("1")}  standalone（临时停止 Caddy，独占 80 端口，几秒后自动重启）${G("[推荐]")}`);
-  console.log(`  ${C("2")}  webroot（Caddy 代理验证，不停服务，需 Caddy 已监听 80）`);
-  console.log(`  ${C("3")}  DNS-01（无需 80 端口，支持通配符，需 DNS 提供商 API）\n`);
+  console.log(`  ${C("1")}  DNS-01（不占用 80/443，支持通配符，需 DNS 提供商 API）${G("[推荐]")}`);
+  console.log(`  ${C("2")}  standalone（临时停止 Caddy，独占 80 端口）`);
+  console.log(`  ${C("3")}  webroot（需 HTTP 80 端口将挑战请求转发到验证目录）\n`);
   const methodChoice = (await ask("  请选择 [1]：")) || "1";
-  const method = methodChoice === "3" ? "dns" : methodChoice === "2" ? "webroot" : "standalone";
+  const method = methodChoice === "2" ? "standalone" : methodChoice === "3" ? "webroot" : "dns";
 
   let dnsProvider = "";
   const dnsEnvVars = {};

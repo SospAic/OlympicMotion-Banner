@@ -2,10 +2,10 @@
  * setup-caddy.mjs — Caddy 反向代理 + 域名配置
  *
  * 功能：
- *   - 自动申请 HTTPS 证书（Let's Encrypt）
- *   - /oauth/callback → localhost:8080（OAuth 授权回调）
- *   - /webhook        → localhost:4174（YouTube PubSubHubbub）
- *   - /               → localhost:4173（Banner 预览页面）
+ *   - 加载外部签发的 HTTPS 证书，并监听 CADDY_PORT（默认 43443）
+ *   - /oauth/callback → 127.0.0.1:OAUTH_CALLBACK_PORT
+ *   - /webhook        → 127.0.0.1:WEBHOOK_PORT
+ *   - /               → 127.0.0.1:PORT
  *
  * 用法：
  *   node scripts/setup-caddy.mjs
@@ -19,6 +19,7 @@ import { execSync, spawn }                          from "node:child_process";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const CADDY_FILE = "/etc/caddy/Caddyfile";
+const CADDY_SNIPPET = "/etc/caddy/conf.d/olympicmotion.caddy";
 const ENV_FILE   = resolve(ROOT, ".env");
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -56,9 +57,13 @@ function saveEnv(key, value) {
 }
 
 function run(cmd, args) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const p = spawn(cmd, args, { stdio: "inherit" });
-    p.on("close", resolve);
+    p.on("error", reject);
+    p.on("close", code => {
+      if (code === 0) resolve(code);
+      else reject(new Error(`${cmd} exited with code ${code}`));
+    });
   });
 }
 
@@ -125,35 +130,28 @@ while (true) {
   const certFile = env.SSL_CERT_FILE ?? `/etc/letsencrypt/live/${domain}/fullchain.pem`;
   const keyFile  = env.SSL_KEY_FILE  ?? `/etc/letsencrypt/live/${domain}/privkey.pem`;
 
-  // Build Caddyfile — HTTPS on high port using externally managed certificates
-  // Caddy loads the cert files directly, no ACME/80-port challenge needed
+  // Build a dedicated Caddy site snippet. Keep global options out of this
+  // fragment so it cannot change HTTPS behavior for other Caddy sites.
   const caddyfile = `# OlympicMotion Banner Engine — Caddy 配置
 # HTTPS 高位端口模式（${caddyPort}），证书由外部脚本管理
-# 80 端口完全释放供证书续期脚本使用
 
 ${domain}:${caddyPort} {
     # 加载外部证书（acme.sh / certbot 签发，无需 80 端口）
     tls ${certFile} ${keyFile}
 
-    # ACME webroot 验证（acme.sh --webroot 模式续期用，不占用 80 端口）
-    handle /.well-known/acme-challenge/* {
-        root * /var/www/acme-challenge
-        file_server
-    }
-
     # OAuth 授权回调（用于 Google OAuth 登录）
     handle /oauth/callback* {
-        reverse_proxy localhost:${oauthPort}
+        reverse_proxy 127.0.0.1:${oauthPort}
     }
 
     # YouTube PubSubHubbub Webhook（即时更新）
     handle /webhook* {
-        reverse_proxy localhost:${webhookPort}
+        reverse_proxy 127.0.0.1:${webhookPort}
     }
 
     # Banner 预览页面
     handle {
-        reverse_proxy localhost:${bannerPort}
+        reverse_proxy 127.0.0.1:${bannerPort}
     }
 
     # 日志
@@ -184,21 +182,33 @@ ${domain}:${caddyPort} {
     continue;
   }
 
-  // ── User confirmed — write Caddyfile ───────────────────────────────────
-  // Backup existing Caddyfile
+  // ── User confirmed — install a dedicated site fragment ─────────────────
+  // Preserve unrelated sites in the main Caddyfile and keep a backup before
+  // adding the import for this project's fragment.
   if (existsSync(CADDY_FILE)) {
     const backup = `${CADDY_FILE}.bak.${Date.now()}`;
     execSync(`cp ${CADDY_FILE} ${backup}`);
     console.log(`✓ 原配置已备份：${backup}`);
   }
 
-  writeFileSync(CADDY_FILE, caddyfile);
-  console.log("✓ Caddyfile 已写入");
+  execSync("mkdir -p /etc/caddy/conf.d");
+  if (existsSync(CADDY_SNIPPET)) {
+    const backup = `${CADDY_SNIPPET}.bak.${Date.now()}`;
+    execSync(`cp ${CADDY_SNIPPET} ${backup}`);
+    console.log(`✓ 原 OlympicMotion 配置已备份：${backup}`);
+  }
+  writeFileSync(CADDY_SNIPPET, caddyfile);
 
-  // Create log dir and webroot dir for ACME challenge
+  const importLine = `import ${CADDY_SNIPPET}`;
+  const mainConfig = existsSync(CADDY_FILE) ? readFileSync(CADDY_FILE, "utf8") : "";
+  if (!mainConfig.split(/\r?\n/).some(line => line.trim() === importLine)) {
+    const separator = mainConfig && !mainConfig.endsWith("\n") ? "\n" : "";
+    writeFileSync(CADDY_FILE, `${mainConfig}${separator}${importLine}\n`);
+  }
+  console.log(`✓ OlympicMotion 配置已写入：${CADDY_SNIPPET}`);
+
+  // Create Caddy log directory
   execSync("mkdir -p /var/log/caddy");
-  execSync("mkdir -p /var/www/acme-challenge");
-  console.log("✓ webroot 目录已创建：/var/www/acme-challenge");
 
   // Reload Caddy
   console.log("\n重载 Caddy...");
@@ -219,7 +229,8 @@ ${domain}:${caddyPort} {
   console.log(`  SSL_KEY_FILE       = ${keyFile}`);
   console.log(`  WEBHOOK_PUBLIC_URL = ${publicUrl}/webhook`);
   console.log(`  BANNER_URL         = ${publicUrl}`);
-  console.log(`\n  ✓ Caddy 监听 HTTPS :${caddyPort}，使用外部证书，80 端口完全释放`);
+  console.log(`\n  ✓ OlympicMotion 站点监听 HTTPS :${caddyPort}，使用外部证书`);
+  console.log("  ✓ 已保留主 Caddyfile 中其他站点配置；请检查其他站点是否仍监听 80/443");
   console.log(`  ✓ OAuth redirect_uri 和 PubSubHubbub callback 均为 HTTPS，Google 验证通过`);
 
   // Show Google Cloud Console instructions
