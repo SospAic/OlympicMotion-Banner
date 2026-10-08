@@ -215,6 +215,8 @@ node scripts/setup-caddy.mjs
 
 OlympicMotion 站点监听 `CADDY_PORT`（默认 `43443`）。配置脚本会以独立片段加入 Caddy，并保留主配置中的其他站点；若要释放整机 80/443，还需确认其他 Caddy 站点和服务没有绑定这两个端口。证书由外部 acme.sh 管理时，域名证书建议使用 DNS-01 API 模式自动签发和续期；HTTP-01 standalone 会临时占用 80。通过域名访问时需带端口，例如 `https://om.example.com:43443`，并在 Google OAuth 客户端登记同一个回调 URL。
 
+在管理菜单中运行证书申请/续期时，HTTP-01 续期会检查 80 端口；若占用者属于 systemd 服务，会在续期期间暂停该服务，并在成功或失败后恢复原本处于运行状态的服务。acme.sh 定时续期也会经由同一保护流程执行。若端口由无法映射到 systemd unit 的进程占用，脚本会停止并报告进程，不会强制杀进程。
+
 ---
 
 ## 常见问题

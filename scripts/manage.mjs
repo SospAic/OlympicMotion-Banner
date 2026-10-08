@@ -302,7 +302,8 @@ async function menuInstall() {
       console.log(); await runScript("scripts/setup-caddy.mjs");
       break;
     case "3":
-      console.log(); await runScript("scripts/renew-cert.mjs");
+      console.log("\n  HTTP-01 续期前会检查 80 端口；若由 systemd 服务占用，会暂时停止并在续期后恢复。\n");
+      await runScript("scripts/renew-cert.mjs");
       break;
     case "4":
       console.log(); await run("npm", ["ci"]);

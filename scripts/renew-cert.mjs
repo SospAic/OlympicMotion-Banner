@@ -19,7 +19,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve }      from "node:path";
 import { fileURLToPath} from "node:url";
 import { createInterface } from "node:readline";
-import { execSync, spawn } from "node:child_process";
+import { execFileSync, execSync, spawn } from "node:child_process";
 
 const ROOT     = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const ENV_FILE = resolve(ROOT, ".env");
@@ -63,8 +63,9 @@ function saveEnv(key, value) {
 }
 
 function run(cmd, args = [], opts = {}) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, { stdio: "inherit", ...opts });
+    proc.on("error", reject);
     proc.on("close", code => resolve(code));
   });
 }
@@ -76,6 +77,90 @@ function tryExec(cmd) {
 
 function cmdExists(cmd) {
   return !!tryExec(`which ${cmd} 2>/dev/null`);
+}
+
+function getPort80Listeners() {
+  let output;
+  try {
+    output = execFileSync("ss", ["-H", "-ltnp", "sport = :80"], { encoding: "utf8" });
+  } catch (e) {
+    throw new Error(`无法检查 80 端口（需要 ss 命令和足够权限）：${e.message}`);
+  }
+
+  const owners = new Map();
+  for (const line of output.split("\n").filter(Boolean)) {
+    const matches = [...line.matchAll(/users:\(\(\"([^\"]+)\",pid=(\d+)/g)];
+    if (!matches.length) {
+      owners.set(`unknown:${line}`, { name: "未知进程", pid: null, unit: null, line });
+      continue;
+    }
+    for (const match of matches) {
+      const [, name, pidText] = match;
+      const pid = Number(pidText);
+      let unit = null;
+      try {
+        const cgroup = readFileSync(`/proc/${pid}/cgroup`, "utf8");
+        unit = cgroup.match(/(?:^|\/)([A-Za-z0-9_.@:-]+\.service)(?:$|\/)/m)?.[1] ?? null;
+      } catch { /* the process may have exited during inspection */ }
+      owners.set(`${unit ?? name}:${pid}`, { name, pid, unit, line });
+    }
+  }
+  return [...owners.values()];
+}
+
+async function withPort80Available(action) {
+  const listeners = getPort80Listeners();
+  if (!listeners.length) return action();
+
+  const unresolved = listeners.filter(owner => !owner.unit);
+  if (unresolved.length) {
+    const summary = unresolved.map(owner => `${owner.name}${owner.pid ? ` (PID ${owner.pid})` : ""}`).join(", ");
+    throw new Error(`80 端口由无法安全映射到 systemd 服务的进程占用：${summary}。为避免误停其他程序，未自动停止。`);
+  }
+
+  const units = [...new Set(listeners.map(owner => owner.unit))];
+  const stopped = [];
+  let result;
+  let actionError;
+  const restoreErrors = [];
+
+  try {
+    for (const unit of units) {
+      try {
+        execFileSync("systemctl", ["is-active", "--quiet", unit]);
+      } catch {
+        continue;
+      }
+      console.log(Y(`  ⏸  检测到 80 端口由 ${unit} 占用，续期期间暂时停止服务`));
+      stopped.push(unit);
+      execFileSync("systemctl", ["stop", unit], { stdio: "inherit" });
+    }
+
+    const remaining = getPort80Listeners();
+    if (remaining.length) {
+      const summary = remaining.map(owner => `${owner.name}${owner.pid ? ` (PID ${owner.pid})` : ""}`).join(", ");
+      throw new Error(`停止 systemd 服务后 80 端口仍被占用：${summary}`);
+    }
+
+    result = await action();
+  } catch (e) {
+    actionError = e;
+  } finally {
+    for (const unit of stopped.reverse()) {
+      try {
+        console.log(`  ▶  正在恢复服务：${unit}`);
+        execFileSync("systemctl", ["start", unit], { stdio: "inherit" });
+      } catch (e) {
+        restoreErrors.push(`${unit}: ${e.message}`);
+      }
+    }
+  }
+
+  if (restoreErrors.length) {
+    throw new Error(`续期流程结束，但以下服务恢复失败，请立即检查：${restoreErrors.join("；")}`, { cause: actionError });
+  }
+  if (actionError) throw actionError;
+  return result;
 }
 
 // ── Check cert expiry ──────────────────────────────────────────────────────
@@ -144,9 +229,6 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
     ];
     console.log(Y(`  ℹ  webroot 模式：确保 Caddy 已将 /.well-known/acme-challenge/* 路由到 ${webroot}`));
   } else {
-    // standalone: temporarily stop Caddy, use port 80, restart after
-    console.log(Y("  ⏸  正在临时停止 Caddy（约 10 秒）..."));
-    try { execSync("systemctl stop caddy 2>/dev/null || true"); } catch {}
     issueArgs = [
       "--issue", "--standalone", "--httpport", "80",
       "-d", domain,
@@ -155,13 +237,11 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   }
 
   console.log(`\n🔐 正在申请证书（${method === "dns" ? "DNS-01" : "HTTP-01 standalone"}）...`);
-  const issueCode = await run(acme, issueArgs);
+  const issueCode = method === "standalone"
+    ? await withPort80Available(() => run(acme, issueArgs))
+    : await run(acme, issueArgs);
 
   if (issueCode !== 0 && issueCode !== 2) {
-    if (method === "standalone") {
-      try { execSync("systemctl start caddy 2>/dev/null || true"); } catch {}
-      console.log(G("  ✓ Caddy 已重新启动"));
-    }
     throw new Error(`证书申请失败（退出码 ${issueCode}）`);
   }
 
@@ -183,7 +263,7 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
       ? `chmod 644 ${NODE_KEY} 2>/dev/null; ${envData.NODE_RELOAD_CMD}`
       : `chmod 644 ${NODE_KEY} 2>/dev/null; echo '节点证书已更新'`;
   } else if (method === "standalone") {
-    reloadCmd = `chmod 644 ${outKey} 2>/dev/null; systemctl start caddy 2>/dev/null || true`;
+    reloadCmd = `chmod 644 ${outKey} 2>/dev/null; systemctl reload caddy 2>/dev/null || true`;
   } else {
     reloadCmd = `chmod 644 ${outKey} 2>/dev/null; systemctl reload caddy 2>/dev/null || true`;
   }
@@ -200,14 +280,8 @@ async function issueAcme({ domain, email, certDir, method, dnsProvider, dnsEnvVa
   ];
   const installCode = await run(acme, installArgs);
   if (installCode !== 0) {
-    // Make sure Caddy is back up even if install failed
-    if (method === "standalone") {
-      try { execSync("systemctl start caddy 2>/dev/null || true"); } catch {}
-      console.log(G("  ✓ Caddy 已重新启动"));
-    }
     throw new Error("证书安装失败");
   }
-  if (method === "standalone") console.log(G("  ✓ Caddy 已重新启动"));
 
   return {
     // Caddy must serve the full chain; the leaf-only cert file can fail
@@ -225,7 +299,7 @@ async function issueCertbot({ domain, email, certDir }) {
   }
 
   console.log("\n🔐 正在申请证书（certbot HTTP-01）...");
-  const code = await run("certbot", [
+  const code = await withPort80Available(() => run("certbot", [
     "certonly", "--standalone",
     "--preferred-challenges", "http",
     "--http-01-port", "80",
@@ -235,7 +309,7 @@ async function issueCertbot({ domain, email, certDir }) {
     "--cert-path",      `${certDir}/cert.crt`,
     "--key-path",       `${certDir}/private.key`,
     "--fullchain-path", `${certDir}/fullchain.pem`,
-  ]);
+  ]));
   if (code !== 0) throw new Error("certbot 申请证书失败");
 
   return {
@@ -250,14 +324,36 @@ function setupCron(method, certDir, domain) {
 
   let cronLine;
   if (method === "acme") {
-    // acme.sh has built-in cron — just ensure it's installed
-    tryExec(`${process.env.HOME}/.acme.sh/acme.sh --install-cronjob 2>/dev/null`);
+    // Route acme.sh's scheduled run through this manager so HTTP-01 renewals
+    // can pause and restore the systemd service that owns port 80.
+    const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
+    tryExec(`${acme} --install-cronjob 2>/dev/null`);
     // Also add a post-renew hook to reload Caddy
     const hookDir = `${process.env.HOME}/.acme.sh/${domain}`;
     mkdirSync(hookDir, { recursive: true });
     writeFileSync(`${hookDir}/reload.sh`, `#!/bin/bash\n${reloadCmd}\n`);
     tryExec(`chmod +x ${hookDir}/reload.sh`);
-    console.log(G("✓ acme.sh 自动续期 cron 已配置"));
+
+    const existing = tryExec("crontab -l 2>/dev/null") ?? "";
+    const wrapperCommand = `${quoteCronArg(process.execPath)} ${quoteCronArg(resolve(ROOT, "scripts/renew-cert.mjs"))} --acme-cron-only`;
+    const lines = existing.split(/\r?\n/);
+    let replacedAcmeCron = false;
+    const nextLines = [];
+    for (const line of lines) {
+      if (/\.acme\.sh\/acme\.sh.*--cron/.test(line)) {
+        if (!replacedAcmeCron) {
+          const schedule = line.match(/^((?:\S+\s+){5})/);
+          nextLines.push(`${schedule?.[1] ?? "0 3 * * * "}${wrapperCommand}`);
+          replacedAcmeCron = true;
+        }
+        continue;
+      }
+      if (line.includes("renew-cert.mjs --acme-cron-only")) continue;
+      nextLines.push(line);
+    }
+    if (!replacedAcmeCron) nextLines.push(`0 3 * * * ${wrapperCommand}`);
+    writeCrontab(nextLines.join("\n"));
+    console.log(G("✓ acme.sh 定时续期已接入端口占用保护（续期前暂停，完成后恢复 systemd 服务）"));
     return;
   }
 
@@ -271,11 +367,22 @@ function setupCron(method, certDir, domain) {
     return;
   }
   const newCron = (existing.trimEnd() + `\n${cronLine}\n`).trim() + "\n";
-  const tmpFile = "/tmp/crontab_om_tmp";
-  writeFileSync(tmpFile, newCron);
-  tryExec(`crontab ${tmpFile}`);
-  tryExec(`rm -f ${tmpFile}`);
+  writeCrontab(newCron);
   console.log(G("✓ 续期 cron 已添加（每月1日和15日 03:00 自动续期）"));
+}
+
+function quoteCronArg(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function writeCrontab(content) {
+  const tmpFile = "/tmp/crontab_om_tmp";
+  writeFileSync(tmpFile, `${content.trimEnd()}\n`);
+  try {
+    execFileSync("crontab", [tmpFile], { stdio: "inherit" });
+  } finally {
+    try { execSync(`rm -f "${tmpFile}"`); } catch {}
+  }
 }
 
 // ── Renew only mode (called by cron) ──────────────────────────────────────
@@ -302,13 +409,24 @@ async function renewOnly() {
   if (bannerInfo) {
     console.log(`  Banner 证书到期：${bannerInfo.expiry.toLocaleDateString()} （剩余 ${bannerInfo.daysLeft} 天）`);
     if (bannerInfo.daysLeft <= 30 && bannerDomain) {
+      const method = env.CERT_METHOD ?? "acme";
       const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
-      if (existsSync(acme)) {
-        const code = await run(acme, ["--renew", "-d", bannerDomain, "--ecc"]);
+      if (method === "certbot" && cmdExists("certbot")) {
+        const code = await withPort80Available(() => run("certbot", [
+          "renew", "--cert-name", bannerDomain, "--non-interactive", "--quiet",
+        ]));
+        if (code === 0) {
+          tryExec("systemctl reload caddy 2>/dev/null || true");
+          console.log(`${ts()} ✓ Banner 证书续期流程完成，Caddy 已重载`);
+        } else console.error(`${ts()} ❌ Banner 证书续期失败`);
+      } else if (method === "acme" && existsSync(acme)) {
+        const code = await withPort80Available(() => run(acme, ["--renew", "-d", bannerDomain, "--ecc"]));
         if (code === 0) {
           tryExec("systemctl reload caddy 2>/dev/null || true");
           console.log(`${ts()} ✓ Banner 证书续期成功，Caddy 已重载`);
         } else console.error(`${ts()} ❌ Banner 证书续期失败`);
+      } else {
+        console.log(`  ⚠  Banner 证书由 ${method} 管理，未找到对应续期工具，跳过`);
       }
     } else if (bannerInfo.daysLeft > 30) {
       console.log("  ✓ Banner 证书有效，无需续期");
@@ -334,12 +452,25 @@ async function renewOnly() {
       const days = info.daysLeft >= 0 ? `剩余 ${info.daysLeft} 天` : `已过期 ${Math.abs(info.daysLeft)} 天`;
       console.log(`  节点证书：${info.expiry.toLocaleDateString()}（${days}）`);
 
-      // Auto-renew if expiring within 30 days
+      // Auto-renew if expiring within 30 days. External managers remain the
+      // source of truth and are only observed here, never renewed twice.
       if (info.daysLeft <= 30 && nodeDomain) {
+        const method = env.NODE_CERT_METHOD ?? "acme";
         const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
-        if (existsSync(acme)) {
+        if (method === "external") {
+          console.log(`  ℹ  节点证书由外部工具管理，跳过本项目续期`);
+        } else if (method === "certbot" && cmdExists("certbot")) {
+          console.log(`  ⏳ 即将到期，开始 certbot 续期...`);
+          const code = await withPort80Available(() => run("certbot", [
+            "renew", "--cert-name", nodeDomain, "--non-interactive", "--quiet",
+          ]));
+          if (code === 0) {
+            if (nodeReload) tryExec(`chmod 644 "${NODE_KEY}" 2>/dev/null; ${nodeReload}`);
+            console.log(`${ts()} ✓ 节点证书续期流程完成`);
+          } else console.error(`${ts()} ❌ 节点证书续期失败`);
+        } else if (method === "acme" && existsSync(acme)) {
           console.log(`  ⏳ 即将到期，开始续期...`);
-          const code = await run(acme, ["--renew", "-d", nodeDomain, "--ecc"]);
+          const code = await withPort80Available(() => run(acme, ["--renew", "-d", nodeDomain, "--ecc"]));
           if (code === 0) {
             // Re-install to fixed paths
             const reloadCmd = nodeReload
@@ -379,6 +510,14 @@ async function renewOnly() {
 
 // ── Main interactive flow ──────────────────────────────────────────────────
 async function main() {
+  if (process.argv.includes("--acme-cron-only")) {
+    const acme = `${process.env.HOME}/.acme.sh/acme.sh`;
+    if (!existsSync(acme)) throw new Error(`找不到 acme.sh：${acme}`);
+    const code = await withPort80Available(() => run(acme, ["--cron", "--home", `${process.env.HOME}/.acme.sh`]));
+    if (code !== 0) process.exitCode = code ?? 1;
+    return;
+  }
+
   if (process.argv.includes("--renew-only")) { await renewOnly(); return; }
 
   if (process.argv.includes("--check")) {
@@ -510,9 +649,22 @@ async function flowCheck(env, type) {
     const confirm = (await ask("\n  证书即将到期，立即续期？(y/N)：")).toLowerCase();
     if (confirm === "y") {
       const domain = env[k.domain] ?? "";
+      const method = env[k.method] ?? "acme";
       const acme   = `${process.env.HOME}/.acme.sh/acme.sh`;
-      if (existsSync(acme) && domain) {
-        const code = await run(acme, ["--renew", "-d", domain, "--force", "--ecc"]);
+      if (method === "external") {
+        console.log(Y("  ⚠  此证书由外部工具管理，请从对应工具续期"));
+      } else if (method === "certbot" && cmdExists("certbot") && domain) {
+        const code = await withPort80Available(() => run("certbot", [
+          "renew", "--cert-name", domain, "--force-renewal", "--non-interactive",
+        ]));
+        if (code === 0) {
+          tryExec(type === "banner"
+            ? "systemctl reload caddy 2>/dev/null || true"
+            : (env[k.reloadCmd] ?? k.defaultReload));
+          console.log(G("\n  ✓ 续期成功"));
+        } else console.log(R("\n  ❌ 续期失败"));
+      } else if (method === "acme" && existsSync(acme) && domain) {
+        const code = await withPort80Available(() => run(acme, ["--renew", "-d", domain, "--force", "--ecc"]));
         if (code === 0) {
           tryExec(type === "banner"
             ? "systemctl reload caddy 2>/dev/null || true"
